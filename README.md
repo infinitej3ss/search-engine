@@ -2,10 +2,10 @@
 
 A fully-functional (in-progress) search engine written in C++.
 
-**Group Members**
-- [Abby](https://github.com/abbytroost)
-- [Claudia](https://github.com/claudire)
-- [Jaegun](https://github.com/JaegunS)
-- [Jess](https://github.com/infinitej3ss)
-- [Yaire](https://github.com/YaireLpz)
+**Team**
+- Abby - [abbytroost](https://github.com/abbytroost)
+- Claudia - [claudire](https://github.com/claudire)
+- Jaegun - [JaegunS](https://github.com/JaegunS)
+- Jess - [infinitej3ss](https://github.com/infinitej3ss)
+- Yaire - [YaireLpz](https://github.com/YaireLpz)
 
