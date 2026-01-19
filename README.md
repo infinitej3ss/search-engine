@@ -1,7 +1,7 @@
 ### ShinkanSearch
 *Results at the velocity of a bullet train*
 
-A group of elite cybercriminals, spread around the globe with one common interest: making information free for everyone on earth
+A group of elite cybercriminals, spread around the globe with one common interest: granting free information access to everyone on earth
 
 **Team**
 - Abby ([abbytroost](https://github.com/abbytroost))
