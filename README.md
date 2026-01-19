@@ -1,6 +1,7 @@
-### Search Engine (name pending)
+### ShinkanSearch
+*Results at the velocity of a bullet train*
 
-A fully-functional (in-progress) search engine written in C++.
+A group of elite cybercriminals, spread around the globe with one common interest: making information free for everyone on earth
 
 **Team**
 - Abby ([abbytroost](https://github.com/abbytroost))
