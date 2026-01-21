@@ -1,5 +1,4 @@
 #include "Utf8.h"
-#include <cstddef>
 
 // SizeOfUtf8 tells the number of bytes it will take to encode the
 // specified value as Utf8.  Assumes values over 31 bits will be replaced.
