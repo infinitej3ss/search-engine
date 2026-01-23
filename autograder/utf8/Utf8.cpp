@@ -52,7 +52,7 @@ size_t IndicatedLength(const Utf8 *p) {
 
     for (size_t len = 2; len <= 6; len++) {
         // shift b right to leave only the leftmost len bits
-        Utf8 top_bits = b >> (8 - len);
+        Utf8 top_bits = b >> (8 - len - 1);
         
         // create expected pattern: len ones followed by a 0
         Utf8 pattern = ((1 << len) - 1) << 1;
@@ -80,6 +80,7 @@ size_t IndicatedLength(const Utf8 *p) {
 // and 0xffff should be returned as the replacement character.
 
 Unicode ReadUtf8( const Utf8 **p, const Utf8 *bound) {
+  if (p == nullptr) return 0;
 
   // cond. 1: *pp points to or past last valid byte
   if (bound != nullptr && *p >= bound) {
@@ -107,7 +108,7 @@ Unicode ReadUtf8( const Utf8 **p, const Utf8 *bound) {
     for (size_t i = 1; i < len; i++) {
       // check if is valid continuation byte (starts with 0b10)
       if (((*p)[i] >> 6) != 0b10) {
-        *p += len;
+        *p += i + 1;
         return ReplacementCharacter;
       }
       c = (c << 6) | ((*p)[i] & 0b00111111);
@@ -195,9 +196,7 @@ Utf8 *WriteUtf8(Utf8 *p, Unicode c, Utf8 *bound) {
 Unicode ReadUtf16( const Utf16 **p, const Utf16 *bound ) {
   Utf16 first = **p;
 
-  size_t len = SizeOfUtf16(first);
-
-  if (bound != nullptr && *p + len >= bound) return ReplacementCharacter;
+  if (bound != nullptr && *p >= bound) return 0;
   
   (*p)++;
 
