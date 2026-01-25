@@ -40,25 +40,17 @@ size_t SizeOfUtf16(Unicode c) {
 // IndicatedLength looks at the first byte of a Utf8 sequence and
 // determines the expected length.  Return 1 for an invalid first byte.
 
-size_t IndicatedLength(const Utf8* p) {
+// tried making a lookup table, performance was basically the same
+// maybe inline?
+size_t inline IndicatedLength(const Utf8* p) {
     Utf8 b = *p;
 
-    // check for 1 byte
-    if ((b & 0x80) == 0) {
-        return 1;
-    }
-
-    for (size_t len = 2; len <= 6; len++) {
-        // shift b right to leave only the leftmost len bits
-        Utf8 top_bits = b >> (8 - len - 1);
-
-        // create expected pattern: len ones followed by a 0
-        Utf8 pattern = ((1 << len) - 1) << 1;
-
-        if (top_bits == pattern) {
-            return len;
-        }
-    }
+    if (b < 0x80) return 1;
+    if ((b & 0b11100000) == 0b11000000) return 2;
+    if ((b & 0b11110000) == 0b11100000) return 3;
+    if ((b & 0b11111000) == 0b11110000) return 4;
+    if ((b & 0b11111100) == 0b11111000) return 5;
+    if ((b & 0b11111110) == 0b11111100) return 6;
 
     return 1;  // invalid first byte
 }
@@ -77,12 +69,21 @@ size_t IndicatedLength(const Utf8* p) {
 // surrogates), "noncharacters" 0xfdd0 to 0xfdef, and the values 0xfffe
 // and 0xffff should be returned as the replacement character.
 
-Unicode ReadUtf8(const Utf8** p, const Utf8* bound) {
-    if (p == nullptr) return 0;
+static constexpr Unicode kMinUtf8Values[7] = {
+    0, 0x0, 0x80, 0x800, 0x10000, 0x200000, 0x4000000
+};
 
-    // cond. 1: *pp points to or past last valid byte
-    if (bound != nullptr && *p >= bound) {
-        return 0;
+
+Unicode ReadUtf8(const Utf8** p, const Utf8* bound) {
+    if (p == nullptr || bound != nullptr && *p >= bound) return 0;
+
+    const Utf8* cur = *p;
+    Utf8 lead = *cur;
+
+    // fast ascii check
+    if (lead < 0x80) {
+        (*p)++;
+        return lead;
     }
 
     // guess at length
@@ -96,48 +97,83 @@ Unicode ReadUtf8(const Utf8** p, const Utf8* bound) {
 
     Unicode c = 0;
 
-    if (len == 1) {
-        // check for malformed byte
-        if ((*p)[0] & 0x80) {
-            (*p)++;
-            return ReplacementCharacter;
-        }
-        c = (*p)[0] & 0x7f;
-    } else {
-        // get bits from first byte (varies by length)
-        c = (*p)[0] & (0x7f >> len);
-
-        // get 6 bits from each continuation byte
-        for (size_t i = 1; i < len; i++) {
-            // check if is valid continuation byte (starts with 0b10)
-            if (((*p)[i] >> 6) != 0b10) {
-                *p += i;
+    // unroll common cases
+    switch (len) {
+        case 2: {
+            Utf8 b1 = cur[1];
+            if ((b1 & 0xc0) != 0x80) {
+                *p = cur + 1;
                 return ReplacementCharacter;
             }
-            c = (c << 6) | ((*p)[i] & 0b00111111);
+            c = ((lead & 0x1f) << 6) | (b1 & 0x3f);
+            if (c < 0x80) {
+                *p = cur + 2;
+                return ReplacementCharacter;
+            }
+            *p = cur + 2;
+            return c;
         }
-    }
+        case 3: {
+            Utf8 b1 = cur[1], b2 = cur[2];
+            if (((b1 & 0xc0) != 0x80) || ((b2 & 0xc0) != 0x80)) {
+                *p = cur + ((b1 & 0xc0) != 0x80 ? 1 : 2);
+                return ReplacementCharacter;
+            }
+            c = ((lead & 0x0f) << 12) | ((b1 & 0x3f) << 6) | (b2 & 0x3f);
+            if (c < 0x800 || (c >= 0xd800 && c <= 0xdfff) || 
+                (c >= 0xfdd0 && c <= 0xfdef) || c == 0xfffe || c == 0xffff) {
+                *p = cur + 3;
+                return ReplacementCharacter;
+            }
+            *p = cur + 3;
+            return c;
+        }
+        case 4: {
+            Utf8 b1 = cur[1], b2 = cur[2], b3 = cur[3];
+            if (((b1 & 0xc0) != 0x80) || ((b2 & 0xc0) != 0x80) || ((b3 & 0xc0) != 0x80)) {
+                *p = cur + ((b1 & 0xc0) != 0x80 ? 1 : (b2 & 0xc0) != 0x80 ? 2 : 3);
+                return ReplacementCharacter;
+            }
+            c = ((lead & 0x07) << 18) | ((b1 & 0x3f) << 12) | 
+                ((b2 & 0x3f) << 6) | (b3 & 0x3f);
+            if (c < 0x10000) {
+                *p = cur + 4;
+                return ReplacementCharacter;
+            }
+            *p = cur + 4;
+            return c;
+        }
+        default: {
+            // len 5, 6, or invalid
+            if (len == 1) {
+                (*p)++;
+                return ReplacementCharacter;
+            }
 
-    // overlong
-    if (SizeOfUtf8(c) != len) {
-        *p += len;
-        return ReplacementCharacter;
-    }
+            c = lead & (0x7f >> len);
+            for (size_t i = 1; i < len; i++) {
+                if ((cur[i] & 0xc0) != 0x80) {
+                    *p = cur + i;
+                    return ReplacementCharacter;
+                }
+                c = (c << 6) | (cur[i] & 0x3f);
+            }
+            
+            //overlong
+            if (c < kMinUtf8Values[len]) {
+                *p = cur + len;
+                return ReplacementCharacter;
+            }
 
-    // Overlong characters and character values 0xd800 to 0xdfff (UTF-16
-    // surrogates), "noncharacters" 0xfdd0 to 0xfdef, and the values 0xfffe
-    // and 0xffff should be returned as the replacement character.
-
-    if ((c >= 0xd800 && c <= 0xdfff) ||
-        (c >= 0xfdd0 && c <= 0xfdef) ||
-        c == 0xfffe || c == 0xffff) {
-        *p += len;
-        return ReplacementCharacter;
+            *p = cur + len;
+            return c;
+        }
     }
 
     *p += len;
     return c;
 }
+
 
 // Scan backward for the first PREVIOUS byte which could
 // be the start of a UTF-8 character.  If bound != null,
@@ -161,12 +197,10 @@ const Utf8* PreviousUtf8(const Utf8* p, const Utf8* bound) {
 // If c > 0x7fffffff (31 bits) write the replacement character.
 
 Utf8* WriteUtf8(Utf8* p, Unicode c, Utf8* bound) {
+    if (c > 0x7fffffff) c = ReplacementCharacter;
     size_t len = SizeOfUtf8(c);
-    if (bound != nullptr && p + len > bound) return p;
 
-    if (c > 0x7fffffff) {
-        c = ReplacementCharacter;
-    }
+    if (bound != nullptr && p + len > bound) return p;
 
     // write continuation bytes (if any), from back to front
     for (size_t i = len; i-- > 1;) {
@@ -197,11 +231,15 @@ Utf8* WriteUtf8(Utf8* p, Unicode c, Utf8* bound) {
 // read as literal values.
 
 Unicode ReadUtf16(const Utf16** p, const Utf16* bound) {
-    Utf16 first = **p;
-
     if (bound != nullptr && *p >= bound) return 0;
 
+    Utf16 first = **p;
     (*p)++;
+
+    // fast path: not surrogate
+    if (first < 0xd800 || first > 0xdfff) {
+        return first;
+    }
 
     // check for high surrogate
     if (first >= 0xd800 && first <= 0xdbff) {
@@ -219,11 +257,11 @@ Unicode ReadUtf16(const Utf16** p, const Utf16* bound) {
             return c;
         }
 
-        // out-of-order or unpaired
+        // out-of-order or unpaired high surrogate, return as-is
         return first;
     }
 
-    // not a surrogate, return as-is
+    // regular character or low surrogate (unpaired), return as-is
     return first;
 }
 
@@ -300,6 +338,8 @@ Unicode GetUtf16(const Utf16* p, const Utf16* bound) {
 // Wrappers that advance the pointer but throw away the value.
 
 const Utf8* NextUtf8(const Utf8* p, const Utf8* bound) {
+    if (*p < 0x80) return p + 1;
+
     ReadUtf8(&p, bound);
     return p;
 }
