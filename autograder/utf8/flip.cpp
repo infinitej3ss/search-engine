@@ -15,6 +15,7 @@ void Utf8ToUtf16(const Utf8** p, const Utf8* bound) {
     Utf16 buffer[2];
 
     fwrite((uint16_t*)&ByteOrderMark, sizeof(uint16_t), 1, stdout);
+    bool first = true;
 
     for (;;) {
         const Utf8* p_prev = *p;
@@ -22,8 +23,15 @@ void Utf8ToUtf16(const Utf8** p, const Utf8* bound) {
 
         if ((*p >= bound && !c) || (*p == p_prev)) return;
 
+        if (first) {
+            first = false;
+            if (c == ByteOrderMark || c == BigEndianBOM) {
+                continue;
+            }
+        }
+
         size_t size = SizeOfUtf16(c);
-        Utf16* end = WriteUtf16(buffer, c);
+        WriteUtf16(buffer, c);
 
         fwrite(buffer, sizeof(Utf16), 1 + (size > 2), stdout);
     }
@@ -41,7 +49,7 @@ void Utf16ToUtf8(const Utf16** p, const Utf16* bound) {
         if (*p == p_prev) return;
 
         size_t size = SizeOfUtf8(c);
-        Utf8* end = WriteUtf8(buffer, c);
+        WriteUtf8(buffer, c);
 
         fwrite(buffer, sizeof(Utf8), size, stdout);
     }
@@ -52,9 +60,9 @@ int main(int argc, char* argv[]) {
     std::cin.tie(nullptr);
 
     if (argc < 2) {
-        std::cout << "Usage: flip <filename>\n";
-        std::cout << "Recognize the input file as either Utf8 or Utf16, convert\n";
-        std::cout << "it to the opposite encoding, and write the result to stdout.\n";
+        std::cerr << "Usage: flip <filename>\n";
+        std::cerr << "Recognize the input file as either Utf8 or Utf16, convert\n";
+        std::cerr << "it to the opposite encoding, and write the result to stdout.\n";
 
         return 1;
     }
@@ -64,7 +72,7 @@ int main(int argc, char* argv[]) {
     Input.open(argv[1], std::ios::binary | std::ios::ate);
 
     if (Input.fail()) {
-        std::cout << argv[1] << " not found.\n";
+        std::cerr << argv[1] << " not found.\n";
         return 1;
     }
 
@@ -112,7 +120,7 @@ int main(int argc, char* argv[]) {
         const Utf16* p = reinterpret_cast<const Utf16*>(content.data());
         const Utf16* end = p + content.size() / sizeof(Utf16);
 
-        if (big_endian) Utf16BigEndianToLittleEndian(reinterpret_cast<Utf16*>(content.data()), content.size() / sizeof(Utf16));
+        if (big_endian) Utf16BigEndianToLittleEndian(reinterpret_cast<Utf16*>(&content[0]), content.size() / sizeof(Utf16));
         Utf16ToUtf8(&p, end);
     }
 }
