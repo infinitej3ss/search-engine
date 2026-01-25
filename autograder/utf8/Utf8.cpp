@@ -86,8 +86,24 @@ Unicode ReadUtf8(const Utf8** p, const Utf8* bound) {
         return lead;
     }
 
+    // unexpected continuation byte
+    if ((lead & 0xc0) == 0x80) {
+        *p = cur + 1;
+        return ReplacementCharacter;
+    }
+
     // guess at length
-    size_t len = IndicatedLength(*p);
+    // replacing IndicatedLength with a quick check to avoid pointer dereference + fx call
+    size_t len;
+    Utf8 b = lead;
+
+    // ascii check above
+    if (b < 0xe0) len = 2;
+    else if (b < 0xf0) len = 3;
+    else if (b < 0xf8) len = 4;
+    else if (b < 0xfc) len = 5;
+    else if (b < 0xfe) len = 6;
+    else len = 1;
 
     // cond. 2: runs past last valid byte
     if (bound != nullptr && *p + len > bound) {
@@ -197,6 +213,21 @@ const Utf8* PreviousUtf8(const Utf8* p, const Utf8* bound) {
 // If c > 0x7fffffff (31 bits) write the replacement character.
 
 Utf8* WriteUtf8(Utf8* p, Unicode c, Utf8* bound) {
+    // fast ascii
+    if (c < 0x80) {
+        if (bound != nullptr && p >= bound) return p;
+        *p = static_cast<Utf8>(c);
+        return p + 1;
+    }
+
+    // fast 2 bit
+    if (c < 0x800) {
+        if (bound != nullptr && p + 2 > bound) return p;
+        p[1] = 0x80 | (c & 0x3f);
+        p[0] = 0xc0 | (c >> 6);
+        return p + 2;
+    }
+
     if (c > 0x7fffffff) c = ReplacementCharacter;
     size_t len = SizeOfUtf8(c);
 
@@ -292,6 +323,13 @@ Unicode ReadUtf16(const Utf16** p, const Utf16* bound) {
 // If c > 0x10ffff (21 bits) write the replacement character.
 
 Utf16* WriteUtf16(Utf16* p, Unicode c, Utf16* bound) {
+    // fast path: BMP, non-surrogate
+    if (c <= 0xffff && (c < 0xd800 || c > 0xdfff)) {
+        if (bound != nullptr && p >= bound) return p;
+        *p++ = static_cast<Utf16>(c);
+        return p;
+    }
+
     size_t needed = SizeOfUtf16(c) / 2;
 
     // bound check
@@ -338,7 +376,11 @@ Unicode GetUtf16(const Utf16* p, const Utf16* bound) {
 // Wrappers that advance the pointer but throw away the value.
 
 const Utf8* NextUtf8(const Utf8* p, const Utf8* bound) {
-    if (*p < 0x80) return p + 1;
+    if (bound == nullptr) {
+        if (*p < 0x80) return p + 1;
+    } else {
+        if (p < bound && *p < 0x80) return p + 1;
+    }
 
     ReadUtf8(&p, bound);
     return p;
