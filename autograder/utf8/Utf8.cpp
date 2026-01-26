@@ -41,8 +41,7 @@ size_t SizeOfUtf16(Unicode c) {
 // determines the expected length.  Return 1 for an invalid first byte.
 
 // tried making a lookup table, performance was basically the same
-// maybe inline?
-size_t inline IndicatedLength(const Utf8* p) {
+size_t IndicatedLength(const Utf8* p) {
     Utf8 b = *p;
 
     if (b < 0x80) return 1;
@@ -273,7 +272,7 @@ Unicode ReadUtf16(const Utf16** p, const Utf16* bound) {
     }
 
     // check for high surrogate
-    if (first >= 0xd800 && first <= 0xdbff) {
+    if (first <= 0xdbff) {
         if (bound != nullptr && *p >= bound) {
             return first;  // unpaired due to bound, return literal
         }
@@ -390,3 +389,4 @@ const Utf16* NextUtf16(const Utf16* p, const Utf16* bound) {
     ReadUtf16(&p, bound);
     return p;
 }
+
