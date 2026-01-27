@@ -107,7 +107,12 @@ template< typename Key, typename Value > class HashTable
 
       ~HashTable( )
          {
-         // YOUR CODE HERE
+            Iterator end = end();
+            for (Iterator head = begin(); head < end;) {
+               Bucket<Key, Value> *prev = *head;
+               head++;
+               delete prev;
+            }
          }
 
 
