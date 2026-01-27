@@ -118,10 +118,17 @@ template< typename Key, typename Value > class HashTable
             friend class HashTable;
 
             // YOUR CODE HERE
+            
+            // needs to keep track of which table, the index of the bucket the head is at, and a pointer to that bucket
+            HashTable *table= nullptr;
+            size_t bucket= 0;
+            Bucket<Key, Value> *b = nullptr;
 
             Iterator( HashTable *table, size_t bucket, Bucket<Key, Value> *b )
                {
-               // YOUR CODE HERE
+                  table = table;
+                  bucket = bucket;
+                  b = b;
                }
 
          public:
@@ -136,44 +143,55 @@ template< typename Key, typename Value > class HashTable
 
             Tuple< Key, Value > &operator*( )
                {
-               // YOUR CODE HERE
+                  return &b;
                }
 
             Tuple< Key, Value > *operator->( ) const
                {
-               // YOUR CODE HERE
+                  return b;
                }
 
             // Prefix ++
             Iterator &operator++( )
                {
-               // YOUR CODE HERE
+                  // caller handles safety
+                  b = b->next;
+                  bucket++;
+                  return this;
                }
 
             // Postfix ++
             Iterator operator++( int )
                {
-               // YOUR CODE HERE
+                  Iterator tmp(*this);
+                  operator++();
+                  return tmp;
                }
 
             bool operator==( const Iterator &rhs ) const
                {
-               // YOUR CODE HERE
+                  return (this->table == rhs.table && this->bucket == rhs.bucket && this->b == rhs.b);
                }
 
             bool operator!=( const Iterator &rhs ) const
                {
-               // YOUR CODE HERE
+                  return !operator==();
                }
          };
 
       Iterator begin( )
          {
-         // YOUR CODE HERE
+            return Iterator(*this, 0, *buckets);
          }
 
       Iterator end( )
          {
-         // YOUR CODE HERE
+            Iterator out = begin();
+
+            for (size_t i = 0; i < numberOfBuckets; ++i) {
+               out++;
+            }
+
+            return out;
          }
    };
