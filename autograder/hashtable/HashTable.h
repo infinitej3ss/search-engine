@@ -109,15 +109,9 @@ template< typename Key, typename Value > class HashTable
          {
             Iterator end = end();
             for (Iterator head = begin(); head < end;) {
-               // delete all the buckets at this index
-               Bucket<Key, Value> *cur = *head;
-               do {
-                  Bucket<Key, Value> *tmp = cur;
-                  cur = cur->next;
-                  delete tmp;
-               } while (cur);
-               
+               Bucket<Key, Value> *prev = *head;
                head++;
+               delete prev;
             }
          }
 
@@ -166,7 +160,15 @@ template< typename Key, typename Value > class HashTable
             Iterator &operator++( )
                {
                   // caller handles safety
+                  // more stuff in linked list
+                  if (b->next) {
+                     b = b->next;
+                     return this;
+                  }
+
+                  // nothing else in this bucket, move to next
                   bucket++;
+                  b = table + bucket;
                   return this;
                }
 
