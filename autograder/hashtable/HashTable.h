@@ -131,9 +131,9 @@ template< typename Key, typename Value > class HashTable
 
             Iterator( HashTable *table, size_t bucket, Bucket<Key, Value> *b )
                {
-                  table = table;
-                  bucket = bucket;
-                  b = b;
+                  this->table = table;
+                  this->bucket = bucket;
+                  this->b = b;
                }
 
          public:
@@ -148,12 +148,12 @@ template< typename Key, typename Value > class HashTable
 
             Tuple< Key, Value > &operator*( )
                {
-                  return &b;
+                  return b->tuple;
                }
 
             Tuple< Key, Value > *operator->( ) const
                {
-                  return b;
+                  return &b->tuple;
                }
 
             // Prefix ++
@@ -163,13 +163,20 @@ template< typename Key, typename Value > class HashTable
                   // more stuff in linked list
                   if (b->next) {
                      b = b->next;
-                     return this;
+                     return *this;
                   }
 
                   // nothing else in this bucket, move to next
                   bucket++;
-                  b = table + bucket;
-                  return this;
+
+                  // linear scan to next
+                  while (bucket < table->numberOfBuckets && table->buckets[bucket] == nullptr) {
+                     bucket++;
+                  }
+
+                  b = (bucket < table->numberOfBuckets) ? table->buckets[bucket] : nullptr;
+
+                  return *this;
                }
 
             // Postfix ++
@@ -193,11 +200,20 @@ template< typename Key, typename Value > class HashTable
 
       Iterator begin( )
          {
-            return Iterator(*this, 0, *buckets);
+            // find first non-empty bucket (if exists)
+            if (uniqueKeys) {
+               // TODO
+            }
+
+            return Iterator(this, 0, nullptr);
          }
 
       Iterator end( )
          {
-            return Iterator(*this, numberOfBuckets, *buckets + numberOfBuckets);
+            if (uniqueKeys) {
+               // TODO
+            }
+
+            return Iterator(this, 0, nullptr);
          }
    };
