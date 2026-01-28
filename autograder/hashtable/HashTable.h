@@ -110,7 +110,31 @@ template< typename Key, typename Value > class HashTable
          // goodrule of thumb is that the table size should be at least 1.5x the
          // number of unique keys.
 
-         // YOUR CODE HERE
+            size_t target = static_cast<size_t>(
+               ceil(uniqueKeys * loading)
+            );
+
+            if (!target) target = 1;
+
+            Bucket<Key, Value> **new_buckets = new Bucket<Key, Value>*[target]();
+
+            for (size_t i = 0; i < numberOfBuckets; ++i) {
+               Bucket<Key, Value>* cur = buckets[i];
+               while (cur) {
+                  Bucket<Key, Value>* next = cur->next;
+
+                  size_t idx = cur->hashValue % target;
+                  cur->next = new_buckets[idx];
+                  new_buckets[idx] = cur;
+
+                  cur = next;
+               }
+            }
+
+            delete buckets;
+            buckets = new_buckets;
+            
+            numberOfBuckets = target;
          }
 
 
@@ -121,22 +145,23 @@ template< typename Key, typename Value > class HashTable
 
       HashTable( bool ( *compareEqual )( const Key, const Key ),
             uint64_t ( *hash )( const Key ),
-            size_t numberOfBuckets )
+            size_t numberOfBuckets ) : compareEqual(compareEqual), hash(hash), numberOfBuckets(numberOfBuckets), uniqueKeys(0)
          {
-         // YOUR CODE HERE
+            buckets = new Bucket<Key, Value>*[numberOfBuckets]();
          }
 
-
-      ~HashTable( )
+      ~HashTable()
          {
-            Iterator end = end();
-            for (Iterator head = begin(); head < end;) {
-               Bucket<Key, Value> *prev = *head;
-               head++;
-               delete prev;
+            for (size_t i = 0; i < numberOfBuckets; ++i) {
+               Bucket<Key, Value>* cur = buckets[i];
+               while (cur) {
+                  auto* next = cur->next;
+                  delete cur;
+                  cur = next;
+               }
             }
+            delete[] buckets;
          }
-
 
       class Iterator
          {
@@ -223,19 +248,18 @@ template< typename Key, typename Value > class HashTable
       Iterator begin( )
          {
             // find first non-empty bucket (if exists)
-            if (uniqueKeys) {
-               // TODO
-            }
+            if (!uniqueKeys) return end();
 
-            return Iterator(this, 0, nullptr);
+            size_t i = 0;
+            while (i < numberOfBuckets && buckets[i] == nullptr)++i;
+
+            if (i == numberOfBuckets) return end();
+
+            return Iterator(this, i, buckets[i]);
          }
 
       Iterator end( )
          {
-            if (uniqueKeys) {
-               // TODO
-            }
-
-            return Iterator(this, 0, nullptr);
+            return Iterator(this, numberOfBuckets, nullptr);
          }
    };
