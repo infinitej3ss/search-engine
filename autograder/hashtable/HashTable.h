@@ -67,8 +67,22 @@ template< typename Key, typename Value > class HashTable
          // in the hash, add it with the initial value.
 
          // YOUR CODE HERE
+              uint64_t h = hash(k);
+              size_t idx = h % numberOfBuckets;
+              Bucket<Key,Value>* b = buckets[idx];
+              while (b != nullptr) {
+                  if (compareEqual(b->tuple.key, k)) {
+                      return &b->tuple;
+                  }
+                  b = b->next;
+              }
+              Bucket<Key,Value>* nb = new Bucket<Key,Value>(k, h, initialValue);
+              // nb->next = buckets[idx], insertion at the front of the linked list;
+              nb->next = buckets[idx];
+              buckets[idx] = nb;
+              uniqueKeys++;
 
-         return nullptr;
+             return &nb->tuple;
          }
 
       Tuple< Key, Value > *Find( const Key k ) const
@@ -78,8 +92,16 @@ template< typename Key, typename Value > class HashTable
          // in the hash, return nullptr.
 
          // YOUR CODE HERE
-
-         return nullptr;
+             uint64_t h = hash(k);
+             size_t idx = h % numberOfBuckets;
+             Bucket <Key,Value>* b = buckets[idx];
+             while (b != nullptr) {
+                 if (compareEqual(b->tuple.key, k)) {
+                     return &b->tuple;
+                 }
+                 b = b->next;
+             }
+             return nullptr;
          }
 
       void Optimize( double loading = 1.5 )
