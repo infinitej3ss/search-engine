@@ -18,6 +18,8 @@ using Hash = HashTable< const char *, size_t >;
 using Pair = Tuple< const char *, size_t >;
 
 
+auto pair_ptr_left_bigger = [](Pair* lhs, Pair* rhs){ return lhs->value > rhs->value; };
+
 Pair **TopN( Hash *hashtable, int N )
    {
    // Find the top N pairs based on the values and return
@@ -27,5 +29,21 @@ Pair **TopN( Hash *hashtable, int N )
 
    // YOUR CODE HERE
 
+   PQ<Pair*, decltype(pair_ptr_left_bigger)> pq(N, pair_ptr_left_bigger);
+   auto head = hashtable->begin();
+   auto end = hashtable->end();
+
+   for (;;) {
+      if (head == end) break;
+      
+      pq.push(&*head++);
+   }
+
+    Pair** result = new Pair*[N]();
+    for (size_t i = 0; i < pq.size(); ++i) {
+        result[i] = pq.get(i);
+    }
+
    return nullptr;
    }
+

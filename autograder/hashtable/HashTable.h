@@ -48,6 +48,10 @@ public:
       }
    }
 
+   T get(size_t i) {
+      return data[i];
+   }
+
 private:
    size_t cap;
    Cmp left_bigger;
@@ -92,10 +96,6 @@ template< typename Key, typename Value > class Tuple
          {
          }
    };
-
-bool tup_left_bigger(auto lhs, auto rhs) {
-   return lhs->value > rhs->value;
-}
 
 template< typename Key, typename Value > class Bucket
    {
