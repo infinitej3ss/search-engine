@@ -14,6 +14,22 @@
 DesiredAction LookupPossibleTag( const char *name, const char *nameEnd )
    {
    // Your code here.
+   // one of the two switches
+   
+   /*
+   OrdinaryText,
+   Title,
+   Comment,
+   Discard,
+   DiscardSection,
+   Anchor,
+   Base,
+   Embed
+   */
+
+   // switch(tag) {
+
+   // }
 
 
    return DesiredAction::OrdinaryText;
