@@ -103,25 +103,42 @@ class HtmlParser
       // words in title, and links found on the page.
 
       HtmlParser( const char *buffer, size_t length ) // YOUR CODE HERE
-         {
-         // YOUR CODE HERE
-         // Outer loop: Looping through the start and end of the html first
-         // Inner loop: We're iterating through each indivdual tags whenever we encounter them
-         //
-         // Starting with the outer loop
-         // We read everything line by line until we encounter an opening tag (<) plus whatever tag comes immediately after it
-         // Once we read in the tag (it's only going to be the tag without any of the symbols so we can look it up in the table)
-         // Then we're going to call the LookupPossibleTag func with the tag and see what the desired action is.
-         // Depending on which action we need to take is,
-         // (we're going to have a switch case) we're going to process the content within each tag accordingly.
-         // There's going to be 8 switch cases.
-         // Once we're finished processing what we need to do, we're going to hop back to the HtmlParser
-         // We'll just switch case based on what we get from lookupPossibleTag
-         // Once the current tag is process, we will continue reading in text until we hit thenext tag symbol and we'll
-         // Continue the process until we reach the end of the file.
+        {
+        // YOUR CODE HERE
+        // Outer loop: Looping through the start and end of the html first
+        // Inner loop: We're iterating through each indivdual tags whenever we encounter them
+        
+        // Starting with the outer loop
+        // We read everything line by line until we encounter an opening tag (<) plus whatever tag comes immediately after it
+        // Once we read in the tag (it's only going to be the tag without any of the symbols so we can look it up in the table)
+        // Then we're going to call the LookupPossibleTag func with the tag and see what the desired action is.
+        // Depending on which action we need to take is,
+        // (we're going to have a switch case) we're going to process the content within each tag accordingly.
+        // There's going to be 8 switch cases.
+        // Once we're finished processing what we need to do, we're going to hop back to the HtmlParser
+        // We'll just switch case based on what we get from lookupPossibleTag
+        // Once the current tag is process, we will continue reading in text until we hit thenext tag symbol and we'll
+        // Continue the process until we reach the end of the file.
 
+        // reading everything
 
-         
+        char* sofWord = nullptr; // start of word ptr
+        char* eofWord = nullptr; // end of word ptr
 
-         }
-   };
+        const char* endPtr = buffer + length;
+        for (char* ptr = const_cast<char*>(buffer); ptr < endPtr; ptr++){
+            
+            // TODO: Detect tag
+            if (*ptr == '<'){
+
+            }
+
+            // TODO: Detect token break
+            if (*ptr == '<'){
+
+            }
+
+            
+        }
+    }
+};
