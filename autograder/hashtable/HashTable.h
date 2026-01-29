@@ -14,77 +14,6 @@ using namespace std;
 
 // You may add additional members or helper functions.
 
-// small priority queue implementation, but optimized bc bounded
-
-template <typename T, typename Cmp>
-class PQ {
-public:
-   PQ(size_t capacity, Cmp cmp)
-   : cap(capacity), left_bigger(cmp) {
-      data.reserve(capacity);
-   }
-
-   bool empty() const {
-      return data.empty();
-   }
-
-   size_t size() const {
-      return data.size();
-   }
-
-   const T& top() const {
-      return data[0];
-   }
-
-   void push(const T& value) {
-      if (data.size() < cap) { // not full, just push
-         data.push_back(value);
-         sift_up(data.size() - 1);
-      }
-
-      else if (left_bigger(value, data[0])) { // our value is larger than the smallest value
-         data[0] = value; // replace the smallest value with ours
-         sift_down(0); // if other values are smaller than ours, they go down
-      }
-   }
-
-   T get(size_t i) {
-      return data[i];
-   }
-
-private:
-   size_t cap;
-   Cmp left_bigger;
-   std::vector<T> data;
-
-   // bubble up new stuff
-   void sift_up(size_t i) {
-      while (i > 0) {
-         size_t p = (i - 1) / 2; // parent
-         if (left_bigger(data[p], data[i])) break; // if parent is bigger do nothing
-         std::swap(data[p], data[i]);
-         i = p;
-      }
-   }
-
-   void sift_down(size_t i) {
-      size_t n = data.size();
-
-      for (;;) {
-         size_t l = 2 * i + 1;
-         size_t r = 2 * i + 2;
-         size_t p = i;
-
-         // if either child is larger we swap
-         if (l < n && left_bigger(data[l], data[p])) p = l;
-         else if (r < n && left_bigger(data[r], data[p])) p = r;
-         else break;
-
-         std::swap(data[i], data[p]);
-         i = p;
-      }
-   }
-};
 
 template< typename Key, typename Value > class Tuple
    {
@@ -117,9 +46,11 @@ template< typename Key, typename Value > class HashTable
 
       Bucket< Key, Value > **buckets;
       size_t numberOfBuckets;
-
       uint64_t ( *hash )( const Key );
+      // YOUR CODE HERE
       bool ( *compareEqual )( const Key, const Key );
+      bool ( *greater ) ( const Value, const Value);
+       
       size_t uniqueKeys;
 
       friend class Iterator;
