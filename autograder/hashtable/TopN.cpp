@@ -18,8 +18,6 @@ using Hash = HashTable< const char *, size_t >;
 using Pair = Tuple< const char *, size_t >;
 
 
-auto pair_ptr_left_bigger = [](Pair* lhs, Pair* rhs){ return lhs->value > rhs->value; };
-
 Pair **TopN( Hash *hashtable, int N )
    {
    // Find the top N pairs based on the values and return
@@ -28,22 +26,56 @@ Pair **TopN( Hash *hashtable, int N )
    // will be null.
 
    // YOUR CODE HERE
-
-   PQ<Pair*, decltype(pair_ptr_left_bigger)> pq(N, pair_ptr_left_bigger);
-   auto head = hashtable->begin();
-   auto end = hashtable->end();
-
-   for (;;) {
-      if (head == end) break;
-      
-      pq.push(&*head++);
-   }
-
-    Pair** result = new Pair*[N]();
-    for (size_t i = 0; i < pq.size(); ++i) {
-        result[i] = pq.get(i);
-    }
-
-   return nullptr;
+    
+    // need a comparator, greater
+    // bool ( *greater ) ( const Value, const Value);
+    
+        // Create the dynamic allocated array, initialized with nullptr
+        Pair** result = new Pair[N];
+        for (int i = 0; i < N; ++i) {
+            result[i] = nullptr;
+        }
+        int count = 0;
+    
+        // Go through the HashTable and insert all elements in the TopN array
+        for (size_t i = 0; i < hashtable->numberOfBuckets; ++i) {
+            Bucket b = hashtable->buckets[i];
+            while (b != nullptr) {
+                if (count < N) {
+                    int j = count;
+                    // directly insert the ptr of tuple
+                    result[j] = b->tuple;
+                    count++;
+                    // should sort every time
+                    while (j > 0 && greater(result[j]->Value, result[j - 1]->Value)) {
+                        // swap (avoid STL)
+                        Pair* tmp = result[j - 1];
+                        result[j - 1] = result[j];
+                        result[j] = tmp;
+                        j--;
+                    }
+                } else {
+                    // do comparision of the values
+                    // if greater, push_back at the end the array, then shifting
+                    // elements to keep the array sorted in descending order, to
+                    // avoid unnecessary shiftings
+                    int j = N - 1;
+                    if (greater(b->tuple->Value, result[j]->Value)) {
+                        result[j] = b->tuple;
+                        while (j > 0 && greater(result[j]->Value, result[j - 1]->Value)) {
+                            Pair* tmp = result[j - 1];
+                            result[j - 1] = result[j];
+                            result[j] = tmp;
+                            j--;
+                        }
+                        
+                    }
+                }
+                b = b->next;
+            }
+        }
+    
+    
+   return result;
    }
 
