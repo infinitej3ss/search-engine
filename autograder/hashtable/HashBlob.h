@@ -12,7 +12,6 @@
 #include <cassert>
 #include <cstring>
 #include <cstdint>
-#include <malloc.h>
 #include <unistd.h>
 #include <sys/mman.h>
 

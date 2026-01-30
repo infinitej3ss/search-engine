@@ -9,6 +9,8 @@
 #include <iomanip>
 #include <cstdint>
 
+#include <cmath> // for ceil
+
 using namespace std;
 
 
@@ -131,7 +133,7 @@ template< typename Key, typename Value > class HashTable
                }
             }
 
-            delete buckets;
+            delete[] buckets;
             buckets = new_buckets;
             
             numberOfBuckets = target;

@@ -23,7 +23,19 @@ bool optVerbose = false;
 
 
 // YOUR CODE HERE
+// FNV bc std::hash hashes pointers
+uint64_t str_hash(const char *k) {
+    uint64_t h = 1469598103934665603ULL;
+    while (*k) {
+        h ^= static_cast<unsigned char>(*k++);
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
 
+bool CompareEqual(const char *lhs, const char *rhs) {
+    return strcmp(lhs, rhs) == 0;
+}
 
 using Hash = HashTable< const char *, size_t >;
 using Pair = Tuple< const char *, size_t >;
@@ -41,9 +53,14 @@ using Pair = Tuple< const char *, size_t >;
 Hash *BuildHashTable( const vector< string > &words,
       uint64_t ( *hash )( const char *key ) )
    {
-   // YOUR CODE HERE
+   Hash *output = new Hash(CompareEqual, str_hash, 128);
 
-    return nullptr;
+   for (const string &word : words) {
+      Pair *cur_pair = output->Find(word.c_str(), 0);
+      cur_pair->value++;
+   }
+
+   return output;
    }
 
 
