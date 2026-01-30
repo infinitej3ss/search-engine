@@ -93,6 +93,7 @@ class HtmlParser
 
    private:
       // YOUR CODE HERE
+      // unordered map that maps all the non discard tag to the appropriate enum 
 
 
    public:
@@ -119,9 +120,6 @@ class HtmlParser
          // We'll just switch case based on what we get from lookupPossibleTag
          // Once the current tag is process, we will continue reading in text until we hit thenext tag symbol and we'll
          // Continue the process until we reach the end of the file.
-
-
-         
 
          }
    };
