@@ -48,8 +48,7 @@ template< typename Key, typename Value > class HashTable
       size_t numberOfBuckets;
       uint64_t ( *hash )( const Key );
       // YOUR CODE HERE
-      bool ( *compareEqual )( const Key, const Key );
-      bool ( *greater ) ( const Value, const Value);
+      bool (*compareEqual)(const Key, const Key);
        
       size_t uniqueKeys;
 
@@ -242,7 +241,7 @@ template< typename Key, typename Value > class HashTable
 
             bool operator!=( const Iterator &rhs ) const
                {
-                  return !operator==();
+                  return !operator==(rhs);
                }
          };
 
