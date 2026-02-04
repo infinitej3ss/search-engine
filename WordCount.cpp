@@ -45,12 +45,41 @@ int TotalWords = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void *WordCount( void *arg )
-	{
+	{   
+   //std::ifstream inFile("zork");
+   FILE* filePointer;
+   bool inWord = false;
+   int wordCount = 0;
+   int c;
+   
+   filePointer = fopen((char*)arg, "r");
 
-	// YOUR CODE HERE
+   if (filePointer == NULL) {
+      return nullptr;
+   }
 
-        return nullptr;
-	}
+   // Start counting the words
+   while ((c = fgetc(filePointer)) != EOF) { // bc EOF could be -1 so we need to check
+      // If it's a space
+      if (isspace(c)) {
+         inWord = false; // We've left the word to space
+      }
+      // If it's a char
+      else if (!inWord) {
+            wordCount++;
+            inWord = true;
+      }
+   } 
+   
+   fclose(filePointer);
+
+   pthread_mutex_lock(&mutex);
+   TotalWords += wordCount;
+   pthread_mutex_unlock(&mutex);
+   
+   return nullptr;
+}
+
 
 // void* printArg(void* arg){
     
@@ -94,7 +123,7 @@ int main( int argc, char** argv )
     // step 3: join all threads from threads vector
     for (int i = 0; i < threads.size(); ++i){
         pthread_join(threads[i], NULL);
-        cout << "Thread " << (int)i << " joined!" << "\n";
+        //cout << "Thread " << (int)i << " joined!" << "\n";
     } 
 
     // step 4: rejoice
