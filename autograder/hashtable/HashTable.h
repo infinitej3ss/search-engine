@@ -79,12 +79,19 @@ template< typename Key, typename Value > class HashTable
                   b = b->next;
               }
               Bucket<Key,Value>* nb = new Bucket<Key,Value>(k, h, initialValue);
-              // nb->next = buckets[idx], insertion at the front of the linked list;
-              nb->next = buckets[idx];
-              buckets[idx] = nb;
+              if (buckets[idx] == nullptr) {
+                  buckets[idx] = nb;
+              } else {
+                  Bucket<Key, Value>* end = buckets[idx];
+                  while (end->next) {
+                      end = end->next;
+                  }
+                  // nb->next = nullptr, insertion at the end of the linked list;
+                  end->next = nb;
+                  nb->next = nullptr;
+              }
               uniqueKeys++;
-
-             return &nb->tuple;
+              return &nb->tuple;
          }
 
       Tuple< Key, Value > *Find( const Key k ) const
