@@ -5,6 +5,7 @@
 
 // Nicole Hamilton  nham@umich.edu
 
+#include <memory>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -52,6 +53,7 @@ struct SerialTuple
 
    public:
 
+      // i have no idea what this means lmao
       // SerialTupleLength = 0 is a sentinel indicating
       // this is the last SerialTuple chained in this list.
       // (Actual length is not given but not needed.)
@@ -65,11 +67,18 @@ struct SerialTuple
       // Calculate the bytes required to encode a HashBucket as a
       // SerialTuple.
 
-      static size_t BytesRequired( const HashBucket *b )
+      static size_t BytesRequired(const HashBucket* b)
          {
-         // YOUR CODE HERE
+         size_t st = sizeof(size_t);
 
-         return 0;
+         // overhead
+         size_t fixed = st * 2 + sizeof(uint64_t); // Length, Value, HashValue
+
+         size_t key_bytes = strlen(b->tuple.key) + 1; // include c string sentinel
+
+         size_t total = fixed + key_bytes;
+
+         return RoundUp(total, sizeof(size_t));
          }
 
       // Write the HashBucket out as a SerialTuple in the buffer,
@@ -78,9 +87,31 @@ struct SerialTuple
       static char *Write( char *buffer, char *bufferEnd,
             const HashBucket *b )
          {
-         // YOUR CODE HERE
+         size_t size = BytesRequired(b);
 
-         return nullptr;
+         // safety
+         if (buffer + size > bufferEnd) return nullptr; // don't know how to actually handle
+
+         // load bucket in
+         const Pair &data = b->tuple;
+
+         // write serial
+         // Length, Value, HashValue, Key
+         std::memset(buffer, 0, size);
+         char *p = buffer;
+
+         // fixed fields
+         std::memcpy(p, &size, sizeof(size_t)); p += sizeof(size_t);
+         std::memcpy(p, &data.value,  sizeof(size_t)); p += sizeof(size_t);
+         std::memcpy(p, &b->hashValue,   sizeof(uint64_t)); p += sizeof(uint64_t);
+
+         // key bytes
+         const char *key = data.key;
+         size_t key_len = std::strlen(key) + 1;
+         std::memcpy(p, key, key_len);
+         p += key_len;
+
+         return buffer + size;
          }
   };
 
@@ -130,9 +161,17 @@ class HashBlob
          // Need space for the header + buckets +
          // all the serialized tuples.
 
-         // YOUR CODE HERE
+         // header
+         size_t st = sizeof(size_t);
+         size_t total = st * 4; // MagicNumber, Version, BlobSize, NumberOfBuckets
 
-         return 0;
+         // since hashTable entries are variable-length due to key, we have to check each bucket
+         for (size_t i = 0; i < hashTable->numberOfBuckets; ++i) {
+            SerialTuple a;
+            total += a.BytesRequired(hashTable->buckets[i]);
+         }
+
+         return total;
          }
 
       // Write a HashBlob into a buffer, returning a
@@ -141,9 +180,44 @@ class HashBlob
       static HashBlob *Write( HashBlob *hb, size_t bytes,
             const Hash *hashTable )
          {
-         // YOUR CODE HERE
+         // safety
+         size_t size = BytesRequired(hashTable);
 
-         return nullptr;
+         // safety
+         if (size > bytes) return nullptr; // don't know how to actually handle
+
+         // write serial
+         std::memset(hb, 0, bytes);
+         HashBlob *p = hb;
+
+         // header
+         size_t st = sizeof(size_t);
+         size_t magic = 48105;
+         size_t ver = 1;
+
+         std::memcpy(p, &magic, st); p += st;
+         std::memcpy(p, &ver, st); p += st;
+         std::memcpy(p, &size, st); p += st;
+         std::memcpy(p, &hashTable->numberOfBuckets, st); p+= st;
+
+         // p is now the pointer for the bucket offsets
+         // b is the pointer for the actual buckets
+         char *b = reinterpret_cast<char*>(p + hashTable->numberOfBuckets * st);
+         SerialTuple a;
+
+         for (size_t i = 0; i < hashTable->numberOfBuckets; ++i) {
+            HashBucket* cur = hashTable->buckets[i];
+            // current bucket
+            while (cur) {
+               HashBucket* next = cur->next;
+               size_t s = a.BytesRequired(cur);
+
+               b = a.Write(b, b + s, cur);
+               std::memcpy(p, &size, st); p += st;
+            }
+         }
+
+         return hb;
          }
 
       // Create allocates memory for a HashBlob of required size
