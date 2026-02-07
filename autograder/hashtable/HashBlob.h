@@ -53,7 +53,6 @@ struct SerialTuple
 
    public:
 
-      // i have no idea what this means lmao
       // SerialTupleLength = 0 is a sentinel indicating
       // this is the last SerialTuple chained in this list.
       // (Actual length is not given but not needed.)
@@ -164,11 +163,21 @@ class HashBlob
          // header
          size_t st = sizeof(size_t);
          size_t total = st * 4; // MagicNumber, Version, BlobSize, NumberOfBuckets
+         
+         total += hashTable->numberOfBuckets * st; // offsets
 
          // since hashTable entries are variable-length due to key, we have to check each bucket
          for (size_t i = 0; i < hashTable->numberOfBuckets; ++i) {
             SerialTuple a;
-            total += a.BytesRequired(hashTable->buckets[i]);
+            HashBucket *cur = hashTable->buckets[i];
+            if (cur) {
+               while (cur) {
+                  HashBucket *next = cur->next;
+                  total += a.BytesRequired(cur);
+                  cur = next;
+               }
+               total += st;
+            }
          }
 
          return total;
@@ -188,7 +197,7 @@ class HashBlob
 
          // write serial
          std::memset(hb, 0, bytes);
-         HashBlob *p = hb;
+         char *p = reinterpret_cast<char*>(hb);
 
          // header
          size_t st = sizeof(size_t);
@@ -202,18 +211,28 @@ class HashBlob
 
          // p is now the pointer for the bucket offsets
          // b is the pointer for the actual buckets
-         char *b = reinterpret_cast<char*>(p + hashTable->numberOfBuckets * st);
+         char *b = p + hashTable->numberOfBuckets * st;
          SerialTuple a;
 
          for (size_t i = 0; i < hashTable->numberOfBuckets; ++i) {
             HashBucket* cur = hashTable->buckets[i];
             // current bucket
-            while (cur) {
-               HashBucket* next = cur->next;
-               size_t s = a.BytesRequired(cur);
+            size_t offset = b - reinterpret_cast<char*>(hb);
+            memcpy(p, &offset, st);
+            p += st;
+            if (cur) {
+               while (cur) {
+                  HashBucket* next = cur->next;
+                  size_t s = a.BytesRequired(cur);
 
-               b = a.Write(b, b + s, cur);
-               std::memcpy(p, &size, st); p += st;
+                  b = a.Write(b, b + s, cur);
+
+                  cur = next;
+               }
+               // sentinel
+               size_t zero = 0;
+               memcpy(b, &zero, st);
+               b += st;
             }
          }
 
