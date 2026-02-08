@@ -26,6 +26,7 @@ using HashBucket = Bucket< const char *, size_t >;
 
 static const size_t Unknown = 0;
 
+uint64_t str_hash( const char * k );
 
 size_t RoundUp( size_t length, size_t boundary )
    {
@@ -146,9 +147,27 @@ class HashBlob
          // ( key, value ) entry.  If the key is not found,
          // return nullptr.
 
-         // YOUR CODE HERE
+         // get the key hash
+         uint64_t hash = str_hash(key);
 
-         return nullptr;
+         // get the bucket offset
+         size_t offset = Buckets[ hash % NumberOfBuckets ];
+         
+         if (!offset) return nullptr; // offset 0 means empty bucket
+
+         // skip to the right bucket
+         const SerialTuple* cur = reinterpret_cast<const SerialTuple*>(reinterpret_cast<const char*>(this) + offset);
+
+         while (size_t len = cur->Length) {
+            // check hashes
+            if (hash == cur->HashValue) {
+               // compare strings
+               if (!strcmp(key, cur->Key)) return cur;
+            }
+            // skip to next
+            cur = reinterpret_cast<const SerialTuple*>(reinterpret_cast<const char*>(cur) + len);
+         }
+         return nullptr; // not found
          }
 
 
@@ -218,9 +237,9 @@ class HashBlob
             HashBucket* cur = hashTable->buckets[i];
             // current bucket
             size_t offset = b - reinterpret_cast<char*>(hb);
-            memcpy(p, &offset, st);
-            p += st;
             if (cur) {
+               memcpy(p, &offset, st);
+               p += st;
                while (cur) {
                   HashBucket* next = cur->next;
                   size_t s = a.BytesRequired(cur);
@@ -233,6 +252,12 @@ class HashBlob
                size_t zero = 0;
                memcpy(b, &zero, st);
                b += st;
+            }
+            else {
+               // bucket offset of 0 signifies empty bucket
+               size_t zero = 0;
+               memcpy(p, &zero, st);
+               p += st;
             }
          }
 
@@ -248,16 +273,21 @@ class HashBlob
 
       static HashBlob *Create( const Hash *hashTable )
          {
-         // YOUR CODE HERE
+         size_t needed = BytesRequired(hashTable);
+         char *p = new char[needed];
+         HashBlob *hb = reinterpret_cast<HashBlob*>(p);
 
-         return nullptr;
+         Write(hb, needed, hashTable);
+
+         return hb;
          }
 
       // Discard
 
       static void Discard( HashBlob *blob )
          {
-         // YOUR CODE HERE
+         char *p = reinterpret_cast<char*>(blob);
+         delete[] p;
          }
    };
 
