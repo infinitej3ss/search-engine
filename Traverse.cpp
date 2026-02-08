@@ -63,6 +63,8 @@ mutex pathVThread;
 // empty. If this is the last thread going to sleep, signal
 // that all the work is done.
 
+string prefixPath(const string &parent, const string &child);
+void AddPath( string path );
 
 string GetWork( ) {
 	string curTask;
@@ -89,6 +91,9 @@ string GetWork( ) {
 	// FETCH THE NEXT TASK IN THE WORK QUEUE
 	curTask = workQueue.front();
 	workQueue.pop();
+
+    // Add current path to path vector
+    AddPath(curTask);
 
 	// The unique_lock automatically unlocks when it goes out of scope
 	return curTask;
@@ -215,7 +220,7 @@ string prefixPath(const string &parent, const string &child) {
 
 int main( int argc, char **argv ) {
     if ( argc < 3  || ( ThreadCount = atoi( argv[ 1 ] ) ) == 0 ) {
-      cerr <<	"Usage: Traverse <number of workers> <list of pathnames>" << endl 
+      cerr <<	"Usage: Traverse <number of workers> <pathnames>" << endl 
 				<< "Number of workers must be greater than 0." << endl 
 				<< 	"Invalid paths are ignored." << endl;
       return 1;
