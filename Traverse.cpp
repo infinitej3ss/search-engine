@@ -18,12 +18,14 @@
 #include <vector>
 #include <queue>
 #include <algorithm>
+// Am I allowed to include this if it's not already there?
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <dirent.h>
 
 
 using namespace std;
-
-
-
 
 // workQueue
 // pathVector
@@ -31,7 +33,22 @@ using namespace std;
 // declare mutexes - maybe one for each data structure - maybe just 2
 // int for number of threads that are currently awake - 0 means all asleep
 
-// we need to be careful that we aren't waiting on something that needs a mutext that we're already holding
+// DATA STRUCTURES AND GLOBALS
+queue<string> workQueue;
+vector<string> pathVector;
+int ThreadCount = 0;
+int awake;
+
+// CONDITION VARS
+condition_variable allAsleep;
+condition_variable workAvailable;
+
+// MUTEXES
+mutex workQThread;
+mutex pathVThread;
+
+
+// we need to be careful that we aren't waiting on something that needs a mutex that we're already holding
 
 // we only need one mutex for the workQueue and the number of awake threads
 // another mutext for the path
@@ -47,50 +64,78 @@ using namespace std;
 // that all the work is done.
 
 
-string GetWork( )
-   {
+string GetWork( ) {
+	string curTask;
 
-	//		YOUR CODE HERE
-	// Make sure that you fetch the next thing in the work queue - fijate como hacerlo porque seria igual como un fila normal
-	// Find a way to scale how to keep track of the number of threads that are awake
-	// Once they're all asleep, we send the signal to main --> just a condition var to send to main so that it knows to
-	// continue --> make it a number
-	// Check if it's 0 --> while not 0, we still have threads active and we wait, otherwise we continue to main --> this condition
-	// is an if statement within main
-	// The condition for checking for more work will be done in here so that we know whether or not we need to wake up threads
+	// CREATE UNIQUE LOCK FOR THE WORK QUEUE
+	unique_lock<mutex> lock(workQThread);
 
-   }
+	// WHILE THERE'S NO WORK AVAILABLE, GO TO SLEEP
+	while (workQueue.empty()) {
+		awake--;
 
+		// SIGNAL TO MAIN THAT ALL ARE ASLEEP
+		if (awake == 0) {
+			allAsleep.notify_one();
+		}
 
-// Add  work to the queue and signal that there's work available.
-
-
-void AddWork( string path )
-   {
-
-	// all this does is literally just add things to the work queue 
-	// and call add path 
-	// and signal that work is available so our threads in getWork wake up to take care of it
-
-   }
-
-
-// Add a new path to the list all those that have been found,
-
-
-void AddPath( string path )
-	{
-
-	// all we do is add the files that we've encountered into the vector
-	
+		// WAIT UNTIL WORK IS ADDED (THIS LOCKS THE MUTEX WHILE WAITING)
+		workAvailable.wait(lock);
+		
+		// When we wake up, increment awake count
+		awake++;
 	}
 
+	// FETCH THE NEXT TASK IN THE WORK QUEUE
+	curTask = workQueue.front();
+	workQueue.pop();
 
-bool DotName( const char *name )
-   {
+	// The unique_lock automatically unlocks when it goes out of scope
+	return curTask;
+}
+
+
+void AddWork( string path ) {
+	struct stat sb;
+	
+	// IGNORE NON-EXISTENT PATHS
+	if (stat(path.c_str(), &sb) != 0) {
+		return;
+	}
+
+	// LOCK THE DATA BEFORE TOUCHING THE SHARED DATA
+	workQThread.lock();
+
+	// ADD TO WORK QUEUE (BOTH FILES AND DIRECTORIES NEED TO BE TRAVERSED)
+	workQueue.push(path);
+
+	// SIGNAL THAT WORK IS AVAILABLE
+	workAvailable.notify_one();
+
+	// UNLOCK MUTEX
+	workQThread.unlock();
+}
+
+
+
+
+void AddPath( string path ) {
+
+	// LOCK THE PATH VECTOR MUTEX
+	pathVThread.lock();
+
+	// ADD FILES INTO THE PATH VECTOR
+	pathVector.push_back(path);
+
+	// UNLOCK MUTEX
+	pathVThread.unlock();
+}
+
+
+bool DotName( const char *name ) {
    return name[ 0 ] == '.' &&
          ( name[ 1 ] == 0 || name[ 1 ] == '.' && name[ 2 ] == 0 );
-   }
+}
 
 
 // Traverse a path.  If it exists, add it to the list of paths that
@@ -98,30 +143,64 @@ bool DotName( const char *name )
 // . and .. to the work queue.  If it doesn't exist, ignore it.
 
 
-void *Traverse( string pathname )
-   {
+void *Traverse( string pathname ) {
+	struct stat sb;
 
-	//		YOUR CODE HERE
-	// Traverese is what's going to go through each directory to find the sub directories and the files
-	// once we enounter something, we check if it's a dir or file and then call add work or add path
-	// remember to prefix the child's name with the parent path name -- just use the string pathname + the child's name
-	// might also need to add the forward slash for the proper strong concatenation
-
+	// CHECK IF THE PATH EXISTS
+	if (stat(pathname.c_str(), &sb) != 0) {
+		return nullptr;
 	}
+
+	// IF IT'S A DIRECTORY
+	if (S_ISDIR(sb.st_mode)) {
+		DIR *dir = opendir(pathname.c_str());
+		if (dir == nullptr) {
+			return nullptr; // CAN'T OPEN DIRECTORY
+		}
+
+		struct dirent *entry;
+		while ((entry = readdir(dir)) != nullptr) {
+			// SKIP . AND ..
+			if (DotName(entry->d_name)) {
+				continue;
+			}
+
+			// BUILD THE FULL PATH USING PREFIX PATH
+			string fullPath = prefixPath(pathname, entry->d_name);
+
+			// ADD TO WORK QUEUE
+			AddWork(fullPath);
+		}
+
+		closedir(dir);
+	}
+
+	return nullptr;
+}
 
 
 // Each worker thread simply loops, grabbing the next item
 // on the work queue and traversing it.
 
 
-void *WorkerThread( void *arg )
-	{
+void *WorkerThread( void *arg ) {
 	while ( true )
 		Traverse( GetWork( ) );
 
 	// Never reached.
 	return nullptr;				
+}
+
+
+// CREATED A HELPER FUNCTION TO PREFIX THE PATHS
+string prefixPath(const string &parent, const string &child) {
+	if (parent.back() == '/') {
+		return parent + child;
 	}
+	else {
+		return parent + '/' + child;
+	}
+}
 
 
 // main() should do the following.
@@ -134,28 +213,54 @@ void *WorkerThread( void *arg )
 // 6  Print the list of paths.
 
 
-int main( int argc, char **argv )
-   {
-   if ( argc < 3  || ( ThreadCount = atoi( argv[ 1 ] ) ) == 0 )
-      {
-      cerr <<	"Usage: Traverse <number of workers> <list of pathnames>" << endl <<
-					"Number of workers must be greater than 0." << endl <<
-					"Invalid paths are ignored." << endl;
+int main( int argc, char **argv ) {
+    if ( argc < 3  || ( ThreadCount = atoi( argv[ 1 ] ) ) == 0 ) {
+      cerr <<	"Usage: Traverse <number of workers> <list of pathnames>" << endl 
+				<< "Number of workers must be greater than 0." << endl 
+				<< 	"Invalid paths are ignored." << endl;
       return 1;
-      }
+    }
 
+	// PARSE THREAD COUNT (already done in if statement above, but keeping for clarity)
+	ThreadCount = atoi(argv[1]);
 
-	//		YOUR CODE HERE
-	// init all the things we get and parse what they are 
-	// grab mutext for getwork queue
-	// spawn the number of threads to param
-	// set the number of awake threads to this number
-	// we need to hold onto the mutex into main when init. our threads to mke sure they don't interefere with init
-	// we do this 
-	// then we wait on the conditional var for all threads being asleep 
-	// gives up the mutex while we wait (by calling wait and wiating on the conditonal var) and we give 
+	// INIT 
+	awake = ThreadCount;
 
-	// sort and print
+	// ADD INITIAL PATHS FROM THE COMMAND LINE ARGS TO THE WORK QUEUE
+	// Start at index 2 (skip program name and thread count)
+	for (int i = 2; i < argc; i++) {
+		AddWork(string(argv[i]));  // Use AddWork instead of directly pushing
+	}
+
+	// CREATE THE WORKER THREADS
+	vector<pthread_t> threads(ThreadCount);
+	for (int i = 0; i < ThreadCount; i++) {
+		if (pthread_create(&threads[i], nullptr, WorkerThread, nullptr) != 0) {
+			cerr << "Error creating thread " << i << endl;
+			return 1;
+		}
+	}
+
+	// WAIT UNTIL ALL THREADS ARE ASLEEP (ALL WORK IS DONE)
+	unique_lock<mutex> lock(workQThread);
+	while (awake > 0) {
+		allAsleep.wait(lock);
+	}
+	lock.unlock();
+
+	// NOW CANCEL/DETACH THE THREADS SINCE THEY'RE IN INFINITE LOOPS
+	for (int i = 0; i < ThreadCount; i++) {
+		pthread_cancel(threads[i]);
+	}
+
+	// SORT THE PATHS
+	sort(pathVector.begin(), pathVector.end());
+
+	// PRINT THE LIST OF PATHS
+	for (const auto &path : pathVector) {
+		cout << path << endl;
+	}
 
 	return 0;
-   }
+}
