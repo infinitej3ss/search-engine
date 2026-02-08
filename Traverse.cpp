@@ -220,7 +220,7 @@ string prefixPath(const string &parent, const string &child) {
 
 int main( int argc, char **argv ) {
     if ( argc < 3  || ( ThreadCount = atoi( argv[ 1 ] ) ) == 0 ) {
-      cerr <<	"Usage: Traverse <number of workers> <pathnames>" << endl 
+      cerr <<	"Usage: Traverse <number of workers> <list of pathnames>" << endl 
 				<< "Number of workers must be greater than 0." << endl 
 				<< 	"Invalid paths are ignored." << endl;
       return 1;
