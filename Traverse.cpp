@@ -23,21 +23,7 @@
 using namespace std;
 
 
-
-
-// workQueue
-// pathVector
-// condition variables for signaling
-// declare mutexes - maybe one for each data structure - maybe just 2
-// int for number of threads that are currently awake - 0 means all asleep
-
-// we need to be careful that we aren't waiting on something that needs a mutext that we're already holding
-
-// we only need one mutex for the workQueue and the number of awake threads
-// another mutext for the path
-	// one mutex for each data structure -- our orb!
-	// the two things we're waiting on -- main waiting on the threads to all fall asleep, and the other is 
-	// getWork waiting on addWork to add stuff to the queue
+//		YOUR CODE HERE
 
 
 
@@ -51,13 +37,7 @@ string GetWork( )
    {
 
 	//		YOUR CODE HERE
-	// Make sure that you fetch the next thing in the work queue - fijate como hacerlo porque seria igual como un fila normal
-	// Find a way to scale how to keep track of the number of threads that are awake
-	// Once they're all asleep, we send the signal to main --> just a condition var to send to main so that it knows to
-	// continue --> make it a number
-	// Check if it's 0 --> while not 0, we still have threads active and we wait, otherwise we continue to main --> this condition
-	// is an if statement within main
-	// The condition for checking for more work will be done in here so that we know whether or not we need to wake up threads
+
 
    }
 
@@ -68,9 +48,8 @@ string GetWork( )
 void AddWork( string path )
    {
 
-	// all this does is literally just add things to the work queue 
-	// and call add path 
-	// and signal that work is available so our threads in getWork wake up to take care of it
+	//		YOUR CODE HERE
+
 
    }
 
@@ -81,8 +60,9 @@ void AddWork( string path )
 void AddPath( string path )
 	{
 
-	// all we do is add the files that we've encountered into the vector
-	
+	//		YOUR CODE HERE
+
+
 	}
 
 
@@ -102,10 +82,7 @@ void *Traverse( string pathname )
    {
 
 	//		YOUR CODE HERE
-	// Traverese is what's going to go through each directory to find the sub directories and the files
-	// once we enounter something, we check if it's a dir or file and then call add work or add path
-	// remember to prefix the child's name with the parent path name -- just use the string pathname + the child's name
-	// might also need to add the forward slash for the proper strong concatenation
+
 
 	}
 
@@ -146,16 +123,6 @@ int main( int argc, char **argv )
 
 
 	//		YOUR CODE HERE
-	// init all the things we get and parse what they are 
-	// grab mutext for getwork queue
-	// spawn the number of threads to param
-	// set the number of awake threads to this number
-	// we need to hold onto the mutex into main when init. our threads to mke sure they don't interefere with init
-	// we do this 
-	// then we wait on the conditional var for all threads being asleep 
-	// gives up the mutex while we wait (by calling wait and wiating on the conditonal var) and we give 
-
-	// sort and print
 
 	return 0;
    }
