@@ -285,8 +285,41 @@ class HashFile
          {
          // Open the file for reading, map it and check the header.
          // new a HashFile, fill in the filehandle and blob address.
-
          // YOUR CODE HERE
+
+            int fb = open(filename, O_RDONLY);
+            //open didn't work
+            if (fb == -1) { 
+               blob = nullptr; 
+               return;
+            }
+            size_t fileS = FileSize(fb);
+            //file is too small to be a valid file
+            if(fileS < sizeof(size_t)*4){
+               close(fb);
+               blob = nullptr;
+               return;
+            }
+            void *mapped_blob = mmap(nullptr, fileS, PROT_READ, MAP_PRIVATE, fb, 0);
+            //can't map blob
+            if (mapped_blob == MAP_FAILED){
+               close(fb);
+               blob = nullptr;
+               return;
+            }
+
+            HashBlob *tempBlob = (HashBlob*) mapped_blob;
+            //check for correct magic and ver
+            if (tempBlob -> MagicNumber != 48105 || tempBlob -> Version != 1){
+               munmap(mapped_blob,fileS);
+               close (fb);
+               blob = nullptr;
+               return;
+            }
+
+            blob = tempBlob;
+
+            close (fb);
          }
 
       HashFile( const char *filename, const Hash *hashtable )
@@ -296,10 +329,50 @@ class HashFile
          // the blob address.
 
          // YOUR CODE HERE
+         HashBlob *tempBlob = HashBlob::Create(hashtable);
+         size_t blobSize = tempBlob -> BlobSize;
+         // 644 - rw-r--r
+         int fb = open(filename, O_RDWR | O_CREAT | O_TRUNC , 0644);
+         //open failed
+         if (fb == -1) {
+            HashBlob::Discard(tempBlob);
+            blob = nullptr;
+            return;
          }
+         //disk error
+         if (ftruncate(fb, blobSize) == -1){
+            close(fb);
+            HashBlob::Discard(tempBlob);
+            blob = nullptr;
+            return;
+
+         }
+         
+         void *mapped_blob = mmap(nullptr, blobSize, PROT_READ | PROT_WRITE, MAP_SHARED, fb, 0);
+         //can't map blob
+         if (mapped_blob == MAP_FAILED){
+            close(fb);
+            HashBlob::Discard(tempBlob);
+            blob = nullptr;
+            return;
+         }
+         memcpy(mapped_blob, tempBlob, blobSize);
+         
+         blob = (HashBlob*) mapped_blob;
+
+         HashBlob::Discard(tempBlob);
+         close(fb);
+         
+      }
+        
 
       ~HashFile( )
          {
          // YOUR CODE HERE
+            if (blob != nullptr){
+               munmap(blob,blob->BlobSize);
+               blob = nullptr;
+
+            }
          }
    };
