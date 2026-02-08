@@ -42,25 +42,16 @@ using namespace std;
 int TotalWords = 0;
 
 // YOUR CODE HERE
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 
 void *WordCount( void *arg )
 	{
 
 	// YOUR CODE HERE
 
-        return nullptr;
+
 	}
 
-// void* printArg(void* arg){
-    
-//     pthread_mutex_lock(&mutex);
-//     TotalWords += 1;
-//     cout << TotalWords << "\n";
-//     pthread_mutex_unlock(&mutex);
-
-//     return nullptr;
-// }
 
 // main() should iterate over the list of filenames given as
 // arguments, creating a new thread running WordCount for each of the
@@ -77,28 +68,10 @@ int main( int argc, char** argv )
 					"Invalid paths are ignored." << endl;
       return 1;
       }
-      
-    std::vector<pthread_t> threads;
 
-    // step 1: iterate through input file args
-    for (int i = 1; i < argc; ++i){
+	// YOUR CODE HERE
 
-        char* curFile = argv[i];
 
-        // step 2: create a thread that called WordCount with each filename
-        pthread_t newThread;
-        pthread_create(&newThread, NULL, WordCount, curFile);
-        threads.emplace_back(newThread);
-    }
-    
-    // step 3: join all threads from threads vector
-    for (int i = 0; i < threads.size(); ++i){
-        pthread_join(threads[i], NULL);
-        cout << "Thread " << (int)i << " joined!" << "\n";
-    } 
-
-    // step 4: rejoice
-    cout << "Total words = " << TotalWords << endl;
-    return 0;
-
+   cout << "Total words = " << TotalWords << endl;
+   return 0;
    }
