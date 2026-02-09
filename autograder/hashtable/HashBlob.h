@@ -208,12 +208,6 @@ class HashBlob
       static HashBlob *Write( HashBlob *hb, size_t bytes,
             const Hash *hashTable )
          {
-         // safety
-         size_t size = BytesRequired(hashTable);
-
-         // safety
-         if (size > bytes) return nullptr; // don't know how to actually handle
-
          // write serial
          std::memset(hb, 0, bytes);
          char *p = reinterpret_cast<char*>(hb);
@@ -225,7 +219,7 @@ class HashBlob
 
          std::memcpy(p, &magic, st); p += st;
          std::memcpy(p, &ver, st); p += st;
-         std::memcpy(p, &size, st); p += st;
+         std::memcpy(p, &bytes, st); p += st;
          std::memcpy(p, &hashTable->numberOfBuckets, st); p+= st;
 
          // p is now the pointer for the bucket offsets
