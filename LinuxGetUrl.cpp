@@ -104,7 +104,12 @@ int main( int argc, char **argv )
    struct addrinfo* serverInfo = nullptr;
 
    // Determine the port to use (default to 80 if not specified)
-   const char* portToUse = (url.Port == url.Path) ? "80" : url.Port;
+   const char* portToUse;
+   if (url.Port[0] == '\0') {  // Check if port string is empty
+      portToUse = "80";
+   } else {
+      portToUse = url.Port;
+   }
 
    int status = getaddrinfo(url.Host, portToUse, &hints, &serverInfo);
 
@@ -113,7 +118,6 @@ int main( int argc, char **argv )
       return 1;
    }
 
-   //std::cout << "Successfully resolved " << url.Host << " to an IP address" << std::endl;
 
    //-----------------------------------------
    //       Create a TCP/IP socket.
@@ -153,15 +157,20 @@ int main( int argc, char **argv )
    
    std::string request;
 
-   // Make sure the path exists (default to "/" if empty)
-   const char* path = url.Path;
-   if (path == nullptr || path[0] == '\0') {
-      path = "/";
+   // Make sure the path is correct (ALWAYS starts with /)
+   std::string path;
+   if (url.Path[0] == '\0') {
+      path = "/";  // Empty path -> root
+   } else if (url.Path[0] != '/') {
+      // Path doesn't start with slash (shouldn't happen, but just in case)
+      path = "/" + std::string(url.Path);
+   } else {
+      path = url.Path;  // Path already has leading slash
    }
 
    // First line: GET method, path, HTTP version
    request += "GET ";
-   request += path;    // The path from parsed URL
+   request += path;
    request += " HTTP/1.1\r\n";
 
    // Host Header
