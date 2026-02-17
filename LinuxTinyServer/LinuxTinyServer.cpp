@@ -138,8 +138,17 @@ const char *Mimetype( const string filename )
    //    YOUR CODE HERE
     // find(".") and then get the extension content
     // return the value according to the key in the dict
-    size_t extension_idx = 
-
+    size_t lastDotPos = filename.find_last_of('.');
+    if (lastDotPos != string:npos && lastDotPos < filename.length() - 1) {
+        // Extract the substring starting from the character after the dot to the end
+        string ext = filename.substr(lastDotPos);
+        
+        for (int i = 0; MimeTable[i] != nullptr; i +=2) {
+            if (ext == MimeTable[i]) {
+                return MimeTable[i+1];
+            }
+        }
+    }
 
    // Anything not matched is an "octet-stream", treated as
    // an unknown binary, which browsers treat as a download.
@@ -225,7 +234,7 @@ bool SafePath( const char *path )
    // attempt to go higher than the root directory
    // for the website.
 
-   // The path must start with a /.
+   // The path must start with a / .
 
    if ( *path != '/' )
       return false;
@@ -235,6 +244,27 @@ bool SafePath( const char *path )
    // website.
 
    //    YOUR CODE HERE
+//    "/../../etc/passwd"     // return false
+//    "/../secret"            // return false
+//    "/data/../../../etc"    // return false
+//    "/files/.."             // return false (end of the string)
+//    "/file..txt"            // return true, in the middle of a file name
+//    "/test/my..file.html"   // return true
+//    "/data/file.."          // return true
+//    "/..hidden"             // return true, this is a hidden file name
+    
+    
+    const char *ptr = path;
+    // check if the char is not the ending char
+    while (*ptr) {
+        if (ptr[0] == '.' && ptr[1] == '.') {
+            if ((ptr == path || ptr[-1] == '/') &&
+                (ptr[2] == '/' || ptr[2] == '\0')) {
+                return false;
+            }
+        }
+        ptr++;
+    }
 
    return true;
    }
