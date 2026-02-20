@@ -139,13 +139,13 @@ const char *Mimetype( const string filename )
     // find(".") and then get the extension content
     // return the value according to the key in the dict
     size_t lastDotPos = filename.find_last_of('.');
-    if (lastDotPos != string:npos && lastDotPos < filename.length() - 1) {
+    if (lastDotPos != string::npos && lastDotPos < filename.length() - 1) {
         // Extract the substring starting from the character after the dot to the end
         string ext = filename.substr(lastDotPos);
         
-        for (int i = 0; MimeTable[i] != nullptr; i +=2) {
-            if (ext == MimeTable[i]) {
-                return MimeTable[i+1];
+        for (auto &mimetype_map : MimeTable) {
+            if (ext == mimetype_map.Extension) {
+                return mimetype_map.Mimetype;
             }
         }
     }
@@ -392,22 +392,25 @@ int main( int argc, char **argv )
 
    // Create the listenSocket, specifying that we'll r/w
    // it as a stream of bytes using TCP/IP.
-
-
-   //    YOUR CODE HERE
-
+   
+   listenSocket = socket(AF_INET, SOCK_STREAM, 0);
 
    // Bind the listen socket to the IP address and protocol
    // where we'd like to listen for connections.
 
 
-   //    YOUR CODE HERE
-
+   if(bind(listenSocket, (sockaddr*)&listenAddress, sizeof(listenAddress))) {
+      cerr << "failed listen bind\n";
+      return 1;
+   }
 
    // Begin listening for clients to connect to us.
 
 
-   //    YOUR CODE HERE
+   if(listen(listenSocket, SOMAXCONN)) {
+      cerr << "failed listen\n";
+      return 1;
+   }
 
 
    // The second argument to listen( ) specifies the maximum
@@ -424,10 +427,7 @@ int main( int argc, char **argv )
    // when we accept the connection.
 
 
-   //    YOUR CODE HERE
-
-
-
+   while ( ( talkAddressLength = sizeof( talkAddress ), talkSocket = accept(listenSocket, (sockaddr*)&talkAddress, &talkAddressLength) ) && talkSocket != -1 )
       {
       // When creating a child thread, you get to pass a void *,
       // usually used as a pointer to an object with whatever
@@ -446,8 +446,9 @@ int main( int argc, char **argv )
       // must be at least as large as the int.  But that would not
       // demonstrate what to do in the general case.)
 
-
-      //    YOIUR CODE HERE
+      pthread_t child;
+      pthread_create( &child, nullptr, Talk, new int (talkSocket) );
+      pthread_detach( child );
       }
 
    close( listenSocket );
