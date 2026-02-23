@@ -305,35 +305,98 @@ void FileNotFound( int talkSocket )
 
 
 void *Talk( void *talkSocket )
-   {
-   // look for a GET message, then reply with the
-   // requested file.
+{
+    // 1. Cast from void * to int * to recover the talk socket id
+    // then delete the copy passed on the heap.
+    int talkFD = *((int*)talkSocket);
+    delete (int*)talkSocket;
 
-   // Cast from void * to int * to recover the talk socket id
-   // then delete the copy passed on the heap.
+    // 2. Read the request from the socket and parse it to extract
+    // the action and the path, unencoding any %xx encodings.
+    char buffer[1024];
+    std::string request;
+    int bytesRead;
 
-   // Read the request from the socket and parse it to extract
-   // the action and the path, unencoding any %xx encodings.
+    // receive data until there is nothing left
+    while ((bytesRead = recv(talkFD, buffer, sizeof(buffer), 0)) > 0){
+        request.append(buffer, bytesRead);
+        // break early if the packet header termination string is reached
+        if (request.find("\r\n\r\n") != string::npos) break;
+    }
 
-   // Check to see if there's a plugin and, if there is,
-   // whether this is a magic path intercepted by the plugin.
+    // Safety check: if we got an empty request, just close and bail out
+    if (request.empty()) {
+        close(talkFD);
+        return nullptr;
+    }
 
-   // If it is intercepted, call the plugin's ProcessRequest( )
-   // and send whatever's returned over the socket.
+    // get the request type
+    size_t endOfRequestType = request.find(" ");
+    size_t endOfRequestPath = request.find(" ", endOfRequestType + 1);
 
-   // If it isn't intercepted, action must be "GET" and
-   // the path must be safe.
+    // Safety check: malformed request without spaces
+    if (endOfRequestType == string::npos || endOfRequestPath == string::npos) {
+        close(talkFD);
+        return nullptr;
+    }
 
-   // If the path refers to a directory, access denied.
-   // If the path refers to a file, write it to the socket.
+    string reqType = request.substr(0, endOfRequestType);
+    string reqPath = request.substr(endOfRequestType + 1, endOfRequestPath - endOfRequestType - 1);
 
-   // Close the socket and return nullptr.
+    // unencode
+    reqPath = UnencodeUrlEncoding(reqPath);
+    string fullPath = RootDirectory + reqPath;
 
+    // 3 & 4. Check for plugin and if it intercepts this path
+    if (Plugin != nullptr && Plugin->MagicPath(reqPath)){
+        string pluginResponse = Plugin->ProcessRequest(reqPath);
+        string header = "HTTP/1.1 200 OK\r\nContent-Length: " + to_string(pluginResponse.length()) + "\r\nConnection: close\r\n\r\n";
+        
+        send(talkFD, header.c_str(), header.length(), 0);
+        send(talkFD, pluginResponse.c_str(), pluginResponse.length(), 0);
+    } 
 
-   //    YOUR CODE HERE
+    // 5. If it isn't intercepted, action must be "GET" and the path must be safe.
+    // (Passed reqPath instead of fullPath to SafePath)
+    else if (reqType == "GET" && SafePath(reqPath.c_str())){
+        
+        int openResult = open(fullPath.c_str(), O_RDONLY);
+        if (openResult == -1){
+            // check for non-existent file
+            FileNotFound(talkFD);
+        } else {
+            off_t size = FileSize(openResult);
+            if (size == -1){
+                // 6. If the path refers to a directory, access denied.
+                AccessDenied(talkFD);
+                close(openResult);
+            } else {
+                // 7. If the path refers to a file, write it to the socket.
+                string mimeType = Mimetype(reqPath);
+                string header = "HTTP/1.1 200 OK\r\nContent-Type: " + mimeType + "\r\nContent-Length: " + to_string(size) + "\r\nConnection: close\r\n\r\n";
+                
+                // Send the HTTP header first
+                send(talkFD, header.c_str(), header.length(), 0);
 
+                // Read the file in chunks and send it to the socket
+                char fileBuf[1024];
+                ssize_t bytesReadFromFile;
+                while ((bytesReadFromFile = read(openResult, fileBuf, sizeof(fileBuf))) > 0) {
+                    send(talkFD, fileBuf, bytesReadFromFile, 0);
+                }
+                
+                close(openResult);
+            }
+        }
+    } else {
+        // Fallback for unsafe paths or non-GET requests
+        AccessDenied(talkFD);
+    }
 
-   }
+    // 8. Close the socket and return nullptr.
+    close(talkFD);
+    return nullptr;
+}
 
 
 
