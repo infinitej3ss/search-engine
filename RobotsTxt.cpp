@@ -229,9 +229,38 @@ bool MatchKeyword( const Utf8 *keyword, const Utf8 **start, const Utf8 *bound )
    // case-independent against the start of the input text.
 
    // YOUR CODE HERE.
+    
+    // start points into a long blob of text, and we're searching for keywords within that blob
+    
+    // get a copy of pointer
+    const Utf8 *p = *start;
+    
+    // match all characters in keyword, consider edge cases like keyword is empty
+    // do direct numeric comparision between p and bound
+    // handle the case if we are running out of the input to check keyword
+    while (*keyword != 0 && p < bound) {
+        // Convert input to lowercase to compare with keyword
+        Utf8 inputChar = *p;
+        if (inputChar >= 'A' && inputChar <= 'Z') {
+            inputChar = inputChar - 'A' + 'a';
+        }
+        
+        // compare and mismatch, return false
+        if (inputChar != *keyword) {
+            return false;
+        }
+        p++;
+        keyword++;
+    }
+        
+    // This catches keyword longer than remaining input, implicit check
+    if (*keyword != 0) {
+        return false;
+    }
 
-   return false;
-   }
+    *start = p;
+    return true;
+}
 
 
 StatementType Identify( const Utf8 **start, const Utf8 *bound )
@@ -244,6 +273,47 @@ StatementType Identify( const Utf8 **start, const Utf8 *bound )
 
 
    // YOUR CODE HERE.
+    const Utf8 *p = *start;
+
+    // skip leading whitespace
+    while (p < bound && (*p == ' ' || *p == '\t')) {
+        p++;
+    }
+
+    // blank lines, comments, or end of input are invalid
+    if (p >= bound || *p == '#' || *p == '\n' || *p == '\r') {
+        return InvalidStatement;
+    }
+
+    // dispatch on first character to avoid trying all 5 keywords
+    Utf8 fc = *p | 0x20;
+
+    if (fc == 'u') {
+        if (MatchKeyword(UserAgentString, &p, bound)) {
+            *start = p;
+            return UserAgentStatement;
+        }
+    } else if (fc == 'a') {
+        if (MatchKeyword(AllowString, &p, bound)) {
+            *start = p;
+            return AllowStatement;
+        }
+    } else if (fc == 'd') {
+        if (MatchKeyword(DisallowString, &p, bound)) {
+            *start = p;
+            return DisallowStatement;
+        }
+    } else if (fc == 'c') {
+        if (MatchKeyword(CrawlDelayString, &p, bound)) {
+            *start = p;
+            return CrawlDelayStatement;
+        }
+    } else if (fc == 's') {
+        if (MatchKeyword(SitemapString, &p, bound)) {
+            *start = p;
+            return SitemapStatement;
+        }
+    }
 
    return InvalidStatement;
    }
@@ -257,11 +327,27 @@ Utf8 *GetArgument( const Utf8 **start, const Utf8 *bound )
    //
    // *start is updated to just past the last character consumed.
 
+    const Utf8 *p = *start;
 
-   // YOUR CODE HERE.
+    // skip leading whitespace after the keyword
+    while (p < bound && (*p == ' ' || *p == '\t')) {
+        p++;
+    }
 
+    // find end of argument (stop at whitespace, newline, comment, or bound)
+    const Utf8 *argStart = p;
+    while (p < bound && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r' && *p != '#') {
+        p++;
+    }
 
-   return nullptr;
+    // copy argument to heap
+    size_t len = p - argStart;
+    Utf8 *arg = new Utf8[len + 1];
+    memcpy(arg, argStart, len);
+    arg[len] = 0;
+
+    *start = p;
+    return arg;
    }
 
 
@@ -270,11 +356,27 @@ const Utf8 *NextLine( const Utf8 **start, const Utf8 *bound )
    // Consume everything up to the beginning of the next line,
    // updating *start, and return a pointer to it.
 
+    const Utf8 *p = *start;
 
-   // YOUR CODE HERE.
+    // scan forward to end of current line
+    while (p < bound && *p != '\n' && *p != '\r') {
+        p++;
+    }
 
+    // skip past the line ending (\r\n, \r, or \n)
+    if (p < bound) {
+        if (*p == '\r') {
+            p++;
+            if (p < bound && *p == '\n') {
+                p++;
+            }
+        } else {
+            p++;
+        }
+    }
 
-   return *start;
+    *start = p;
+    return *start;
    }
 
 
@@ -298,11 +400,32 @@ StatementType GetStatement( const Utf8 **start, const Utf8 *bound, vector< strin
    // the sitemap vector, but otherwise skipped because they're global, and
    // don't affect how rules are parsed.
 
+    // keep scanning lines until we find a valid statement or hit end
+    while (*start < bound) {
+        StatementType type = Identify(start, bound);
 
-   // YOUR CODE HERE.
+        if (type == SitemapStatement) {
+            // construct string directly from input without intermediate allocation
+            const Utf8 *sp = *start;
+            while (sp < bound && (*sp == ' ' || *sp == '\t')) sp++;
+            const Utf8 *argStart = sp;
+            while (sp < bound && *sp != ' ' && *sp != '\t' &&
+                   *sp != '\n' && *sp != '\r' && *sp != '#') sp++;
+            sitemap.push_back(string((const char *)argStart, sp - argStart));
+            *start = sp;
+            NextLine(start, bound);
+            continue;
+        }
 
+        if (type != InvalidStatement) {
+            return type;
+        }
 
-   return InvalidStatement;
+        // skip invalid / blank / comment lines
+        NextLine(start, bound);
+    }
+
+    return InvalidStatement;
    }
 
 
@@ -312,9 +435,27 @@ const Utf8 *FindSubstring( const Utf8 *a, const Utf8 *b )
    // compare.  If a match is found, return a pointer to where in b.  If no
    // match is found, return nullptr.
 
+    if (!a || !b) {
+        return nullptr;
+    }
 
-   // YOUR CODE HERE.
-
+    // try matching a at each position in b
+    for (const Utf8 *p = b; *p; p++) {
+        const Utf8 *pa = a, *pb = p;
+        while (*pa && *pb) {
+            Utf8 ca = *pa, cb = *pb;
+            // convert both to lowercase for comparison
+            if (ca >= 'A' && ca <= 'Z') ca = ca - 'A' + 'a';
+            if (cb >= 'A' && cb <= 'Z') cb = cb - 'A' + 'a';
+            if (ca != cb) break;
+            pa++;
+            pb++;
+        }
+        // if we exhausted a, we found a match
+        if (*pa == 0) {
+            return p;
+        }
+    }
 
    //Did not find a match anywhere.
    return nullptr;
@@ -332,10 +473,10 @@ class UserAgent
          // Return true if the name appears anywhere in the string
          // pointed to by user. Use case-independent compare.
 
-         // YOUR CODE HERE.
-
-
-         return false;
+         if (matchAny) {
+             return true;
+         }
+         return FindSubstring(name, user) != nullptr;
          }
 
       UserAgent( const Utf8 **start, const Utf8 *bound )
@@ -343,8 +484,9 @@ class UserAgent
          // The name is the argument immediately following on
          // the input. Note if it's an * match-any wildcard..
 
-         // YOUR CODE HERE.
-
+         name = GetArgument(start, bound);
+         // treat * or empty name as match-any
+         matchAny = (name[0] == '*' && name[1] == 0) || name[0] == 0;
          }
 
       ~UserAgent( )
@@ -367,9 +509,51 @@ class Wildcard
          //
          // If with either wildcard or path is null, return false.
 
-         // YOUR CODE HERE.
+         if (!wildcard || !path) {
+             return false;
+         }
 
-         return false;
+         while (*wildcard) {
+             if (*wildcard == '*') {
+                 // skip consecutive *'s
+                 while (*wildcard == '*') {
+                     wildcard++;
+                 }
+
+                 // * at end of wildcard matches everything remaining
+                 if (*wildcard == 0) {
+                     return true;
+                 }
+
+                 // *$ also matches everything to end
+                 if (*wildcard == '$' && *(wildcard + 1) == 0) {
+                     return true;
+                 }
+
+                 // try matching rest of wildcard at every position in path
+                 while (*path) {
+                     if (Match(wildcard, path)) {
+                         return true;
+                     }
+                     path++;
+                 }
+                 // try with empty remaining path (for $ at end)
+                 return Match(wildcard, path);
+             } else if (*wildcard == '$' && *(wildcard + 1) == 0) {
+                 // $ at end means path must also be at end
+                 return *path == 0;
+             } else {
+                 // literal character must match exactly (case-sensitive)
+                 if (*path != *wildcard) {
+                     return false;
+                 }
+                 wildcard++;
+                 path++;
+             }
+         }
+
+         // wildcard exhausted, prefix match succeeds
+         return true;
          }
 
 
@@ -391,8 +575,50 @@ class Wildcard
          // 4. Note the length and whether it ends in $.
          // 5. Discard the original version as no longer needed.
 
-         // YOUR CODE HERE.
+         // parse argument and URL-decode in a single pass (one allocation)
+         const Utf8 *p = *start;
 
+         // skip whitespace after keyword
+         while (p < bound && (*p == ' ' || *p == '\t')) p++;
+
+         // find end of argument
+         const Utf8 *argEnd = p;
+         while (argEnd < bound && *argEnd != ' ' && *argEnd != '\t' &&
+                *argEnd != '\n' && *argEnd != '\r' && *argEnd != '#') argEnd++;
+
+         // skip initial /
+         if (p < argEnd && *p == '/') p++;
+
+         // allocate and URL-decode directly (decoding only shrinks)
+         wildcard = new Utf8[argEnd - p + 1];
+         Utf8 *t = wildcard;
+
+         while (p < argEnd) {
+             if (*p == '%' && p + 2 < argEnd) {
+                 int i = HexLiteralCharacter(p[1]);
+                 int j = HexLiteralCharacter(p[2]);
+                 int hex = (i << 4 | j);
+                 if (hex >= 0 && hex != '/') {
+                     *t++ = (Utf8)hex;
+                     p += 3;
+                     continue;
+                 }
+             }
+             *t++ = *p++;
+         }
+         *t = 0;
+
+         length = t - wildcard;
+         endsInDollarSign = length > 0 && wildcard[length - 1] == '$';
+
+         // count literal bytes (everything except * and terminal $)
+         literalBytes = 0;
+         for (Utf8 *c = wildcard; *c; c++) {
+             if (*c != '*') literalBytes++;
+         }
+         if (endsInDollarSign) literalBytes--;
+
+         *start = argEnd;
          }
 
 
@@ -504,8 +730,20 @@ class Rule
          // path specified as the next argument on the input and insertion sort
          // it into the list.
 
-         // YOUR CODE HERE.
+         Directive *d = new Directive(type, start, bound);
 
+         // skip empty wildcards (empty Disallow/Allow has no effect)
+         if (d->wildcard.length == 0) {
+             delete d;
+             return;
+         }
+
+         // insertion sort: find the right position by priority
+         auto it = Directives.begin();
+         while (it != Directives.end() && !TakesPriority(d, *it)) {
+             it++;
+         }
+         Directives.insert(it, d);
          }
 
 
@@ -515,8 +753,16 @@ class Rule
          // and attempt to convert to aninteger with atoi( ).  If it's
          // larger than current delay, use the new value.
 
-         // YOUR CODE HERE.
-
+         // parse integer directly from input without allocation
+         const Utf8 *p = *start;
+         while (p < bound && (*p == ' ' || *p == '\t')) p++;
+         int delay = 0;
+         while (p < bound && *p >= '0' && *p <= '9') {
+             delay = delay * 10 + (*p - '0');
+             p++;
+         }
+         if (delay > crawlDelay) crawlDelay = delay;
+         *start = p;
          }
 
 
@@ -529,7 +775,29 @@ class Rule
          // If a match is found, return a pointer to the directive. Optionally
          // report which UserAgent was matched.
 
-         // YOUR CODE HERE.
+         // check if any user agent in this rule matches
+         UserAgent *matchedAgent = nullptr;
+         for (auto u : UserAgents) {
+             if (u->Match(user)) {
+                 matchedAgent = u;
+                 break;
+             }
+         }
+
+         if (!matchedAgent) {
+             return nullptr;
+         }
+
+         if (agent) {
+             *agent = matchedAgent;
+         }
+
+         // find first matching directive (sorted by priority)
+         for (auto d : Directives) {
+             if (d->wildcard.Match(path)) {
+                 return d;
+             }
+         }
 
          return nullptr;
          }
@@ -573,9 +841,38 @@ RobotsTxt::RobotsTxt( const Utf8 *robotsTxt, const size_t length )
       // 3. Collect the directives.
       // 4. Add this rule to the list.
 
-      // YOUR CODE HERE.
+      // create a new rule for this group
+      Rule *rule = new Rule();
 
+      // collect all consecutive user-agent statements
+      while (type == UserAgentStatement) {
+          rule->AddUserAgent(&p, bound);
+          NextLine(&p, bound);
+          if (p < bound) {
+              type = GetStatement(&p, bound, sitemap);
+          } else {
+              type = InvalidStatement;
+          }
+      }
 
+      // collect all following directives
+      while (type == AllowStatement || type == DisallowStatement ||
+             type == CrawlDelayStatement) {
+          if (type == CrawlDelayStatement) {
+              rule->AddCrawlDelay(&p, bound);
+          } else {
+              rule->AddDirective(type, &p, bound);
+          }
+          NextLine(&p, bound);
+          if (p < bound) {
+              type = GetStatement(&p, bound, sitemap);
+          } else {
+              type = InvalidStatement;
+          }
+      }
+
+      // add this rule to the list
+      rules.push_back(rule);
       }
    }
 
@@ -602,10 +899,68 @@ Directive *RobotsTxt::FindDirective( const Utf8 *user, const Utf8 *path,
    // 1. URL decode the path.
    // 2. Iterate over the rules, looking for one that best applies.
 
-   // YOUR CODE HERE.
+    Utf8 *decodedPath = UrlDecode(path);
 
+    Directive *bestDirective = nullptr;
+    Rule *bestRule = nullptr;
+    bool bestMatchedWildcard = false;
+    int maxCrawlDelay = 0;
 
-   return nullptr;
+    for (auto r : rules) {
+        // check if any user agent in this rule matches
+        UserAgent *matchedAgent = nullptr;
+        for (auto u : r->UserAgents) {
+            if (u->Match(user)) {
+                matchedAgent = u;
+                break;
+            }
+        }
+
+        if (!matchedAgent) continue;
+
+        // find first matching directive (sorted by priority)
+        Directive *d = nullptr;
+        for (auto dir : r->Directives) {
+            if (dir->wildcard.Match(decodedPath)) {
+                d = dir;
+                break;
+            }
+        }
+
+        if (!d) continue;
+
+        // this rule is applicable, track crawl delay
+        if (r->crawlDelay > maxCrawlDelay) {
+            maxCrawlDelay = r->crawlDelay;
+        }
+
+        bool isWildcard = matchedAgent->matchAny;
+
+        if (!bestDirective) {
+            bestDirective = d;
+            bestRule = r;
+            bestMatchedWildcard = isWildcard;
+        } else if (bestMatchedWildcard && !isWildcard) {
+            // literal agent name beats wildcard match
+            bestDirective = d;
+            bestRule = r;
+            bestMatchedWildcard = isWildcard;
+        } else if (bestMatchedWildcard == isWildcard &&
+                   TakesPriority(d, bestDirective)) {
+            bestDirective = d;
+            bestRule = r;
+        }
+    }
+
+    if (crawlDelay) {
+        *crawlDelay = maxCrawlDelay;
+    }
+    if (rule) {
+        *rule = bestRule;
+    }
+
+    delete[] decodedPath;
+    return bestDirective;
    }
 
 
