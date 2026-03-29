@@ -12,7 +12,7 @@ void process_new_url(std::string url){
     // if the file is large enough, send it
 }
 
-// send a specified machine its file and clear it
+// send a specified machine its list of links and clear it
 void send_url_file(int machineID){
     
     // serialize file data into buffer
