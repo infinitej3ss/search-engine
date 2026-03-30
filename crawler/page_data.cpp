@@ -122,7 +122,13 @@ int write_page(u_int64_t rank_file, PageData& pd) {
         return -1;
     }
 
-    u_int64_t data_size = sizeof(SerializedPageDataHeader) + pd.titlewords.size() * 257 + pd.words.size() * 257;  // maximum possible size
+    u_int64_t data_size = sizeof(SerializedPageDataHeader) + 2 * sizeof(u_int64_t);
+    for(auto &word : pd.titlewords) {
+        data_size += sizeof(u_int16_t) + word.size();
+    }
+    for (auto& word : pd.words) {
+        data_size += sizeof(u_int16_t) + word.size();
+    }
 
     std::vector<u_int8_t> serialized_data = std::vector<u_int8_t>(data_size);  // initialize with data_size bytes
     void* current_location = serialized_data.data();
@@ -138,7 +144,9 @@ int write_page(u_int64_t rank_file, PageData& pd) {
 
     // resize data vector
     data_size = (u_int8_t*)current_location - serialized_data.data();
-    serialized_data.resize(data_size);
+    if (data_size != serialized_data.size()) {
+        serialized_data.resize(data_size);
+    }
 
     pthread_mutex_lock(&PAGE_FILES[rank_file].page_file_mutex);
 
