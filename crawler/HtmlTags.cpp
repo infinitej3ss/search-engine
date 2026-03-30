@@ -3,7 +3,6 @@
 #include <string>
 #include <cassert>
 #include "HtmlTags.h"
-#include <unordered_map>
 
 // name points to beginning of the possible HTML tag name.
 // nameEnd points to one past last character.
@@ -12,18 +11,6 @@
 // If the name is found in the TagsRecognized table, return
 // the corresponding action.
 // If the name is not found, return OrdinaryText.
-
-std::unordered_map<std::string, DesiredAction> action = {
-   //{"", OrdinaryText},
-   {"title", DesiredAction::Title},
-   {"!--", DesiredAction::Comment},
-   {"style", DesiredAction::DiscardSection},
-   {"script", DesiredAction::DiscardSection},
-   {"svg", DesiredAction::DiscardSection},
-   {"a", DesiredAction::Anchor},
-   {"base", DesiredAction::Base},
-   {"embed", DesiredAction::Embed}
-};
 
 DesiredAction LookupPossibleTag( const char *name, const char *nameEnd )
    {
