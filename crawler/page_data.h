@@ -27,7 +27,7 @@ struct __attribute__((packed)) PageFileHeader {
 
 struct PageFile {
     pthread_mutex_t page_file_mutex = PTHREAD_MUTEX_INITIALIZER;
-    u_int64_t num_files_of_this_rank_written = 0; // TODO: initialize these with how many have been previously written when crawler starts
+    u_int64_t num_files_of_this_rank_written = 0;
     u_int64_t size_bytes = 0;
     u_int64_t num_pages = 0;
     std::vector<std::vector<u_int8_t>> page_data_entries; // stored as serialized data in the vectors' data

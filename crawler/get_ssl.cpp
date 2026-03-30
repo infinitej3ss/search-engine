@@ -1,15 +1,8 @@
-#include "string"
-
-// 
-enum get_url_return {
-    failure,
-    blacklist,
-    success
-};
+#include "get_ssl.h"
 
 
 // take a URL and return the HTML
-get_url_return get_ssl(std::string &page){
+get_ssl_return get_ssl(std::string &url, std::string &page){
 
     // TODO: implement functionality
 

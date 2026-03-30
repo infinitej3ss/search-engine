@@ -1,8 +1,7 @@
 #include "string"
 
 // given a URL, either pass it to the frontier or distribute to another machine
-void process_new_url(std::string url){
-
+void process_new_url(std::string &url, u_int64_t distance_from_seedlist) {
     // hash url and take mod (MD5)
 
     // check if url is for the current machine

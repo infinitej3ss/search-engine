@@ -21,7 +21,7 @@ u_int64_t PAGE_FILE_SIZE_BYTES = 0;
 pthread_mutex_t PAGE_FILE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
 PageFile PAGE_FILES[NUM_PAGE_FILE_RANKS];
-std::string DIR_PATH = "./";  // TODO: main function initialize this path and page file's number written
+std::string DIR_PATH = "./";  // TODO: function to initialize this path and page file's number written
 
 // load given page file into memory for later use with get_next_page
 int load_page_file(const std::string& file_name) {
