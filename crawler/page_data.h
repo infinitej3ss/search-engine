@@ -1,5 +1,7 @@
 #pragma once
 
+#include <pthread.h>
+
 #include <string>
 #include <vector>
 
@@ -24,8 +26,10 @@ struct __attribute__((packed)) PageFileHeader {
 };
 
 struct PageFile {
-    u_int64_t size_bytes;
-    u_int64_t num_pages;
+    pthread_mutex_t page_file_mutex = PTHREAD_MUTEX_INITIALIZER;
+    u_int64_t num_files_of_this_rank_written = 0; // TODO: initialize these with how many have been previously written when crawler starts
+    u_int64_t size_bytes = 0;
+    u_int64_t num_pages = 0;
     std::vector<std::vector<u_int8_t>> page_data_entries; // stored as serialized data in the vectors' data
 };
 
@@ -51,6 +55,18 @@ void close_page_file();
 // Returns:
 //      0 on success, -1 on failure
 int get_next_page(PageData& pd);
+
+// write page data to specified rank file
+//
+// Returns:
+//      0 on success, -1 on failure, 1 if page is full and ready to be written
+int write_page(u_int64_t rank_file, PageData& pd);
+
+// write specified page file to disk
+//
+// Returns:
+//      0 on success, -1 on failure
+int write_page_file(u_int64_t rank_file);
 
 // writes a string to buffer and increments buffer past the end of the serialized string
 void serialize_string(void** buffer, const std::string& s);

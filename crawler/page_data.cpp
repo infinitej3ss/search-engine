@@ -3,14 +3,15 @@
 #include "page_data.h"
 
 #include <fcntl.h>
-#include <pthread.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
 #include <cstring>
 #include <utility>
 
-const u_int64_t CORRECT_MAGIC_NUMBER = 863404304674789781;
+const u_int64_t NUM_PAGE_FILE_RANKS = 5;                    // number of page files to be written to based on url's ranking
+const u_int64_t MAX_PAGE_FILE_SIZE_BYTES = 200000000;       // 200MB
+const u_int64_t CORRECT_MAGIC_NUMBER = 863404304674789781;  // magic number for page file
 
 void* MAPPED_PAGE_FILE;
 void* CURRENT_PAGE_FILE_LOCATION;
@@ -19,6 +20,8 @@ u_int64_t NUM_PAGE_FILE_ENTRIES = 0;
 u_int64_t PAGE_FILE_SIZE_BYTES = 0;
 pthread_mutex_t PAGE_FILE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
+PageFile PAGE_FILES[NUM_PAGE_FILE_RANKS];
+std::string DIR_PATH = "./";  // TODO: main function initialize this path and page file's number written
 
 // load given page file into memory for later use with get_next_page
 int load_page_file(const std::string& file_name) {
@@ -33,6 +36,7 @@ int load_page_file(const std::string& file_name) {
     // open the file
     int fd = open(file_name.c_str(), O_RDONLY);
     if(fd == -1) {
+        close(fd);
         pthread_mutex_unlock(&PAGE_FILE_MUTEX);
         return -1;
     }
@@ -40,12 +44,14 @@ int load_page_file(const std::string& file_name) {
     // extract header
     PageFileHeader file_header;
     if(read(fd, &file_header, sizeof(PageFileHeader)) != sizeof(PageFileHeader)) {
+        close(fd);
         pthread_mutex_unlock(&PAGE_FILE_MUTEX);
         return -1;
     }
 
     // check magic number to make sure this is a page file
     if(file_header.magic_number != CORRECT_MAGIC_NUMBER) {
+        close(fd);
         pthread_mutex_unlock(&PAGE_FILE_MUTEX);
         return -1;
     }
@@ -54,6 +60,7 @@ int load_page_file(const std::string& file_name) {
 
     // create memory mapping
     MAPPED_PAGE_FILE, CURRENT_PAGE_FILE_LOCATION = mmap(NULL, PAGE_FILE_SIZE_BYTES, PROT_READ, 0, fd, 0);
+    close(fd);
     if(MAPPED_PAGE_FILE == MAP_FAILED) {
         pthread_mutex_unlock(&PAGE_FILE_MUTEX);
         return -1;
@@ -108,6 +115,95 @@ int get_next_page(PageData& pd) {
     return 0;
 }
 
+// write page data to specified rank file
+int write_page(u_int64_t rank_file, PageData& pd) {
+    // check for valid rank_file
+    if (rank_file >= NUM_PAGE_FILE_RANKS) {
+        return -1;
+    }
+
+    u_int64_t data_size = sizeof(SerializedPageDataHeader) + pd.titlewords.size() * 257 + pd.words.size() * 257;  // maximum possible size
+
+    std::vector<u_int8_t> serialized_data = std::vector<u_int8_t>(data_size);  // initialize with data_size bytes
+    void* current_location = serialized_data.data();
+
+    // write header
+    memcpy(current_location, &pd.distance_from_seedlist, sizeof(u_int64_t));
+    current_location += sizeof(u_int64_t);
+
+    // write data
+    serialize_string(&current_location, pd.url);
+    serialize_string_vector(&current_location, pd.words);
+    serialize_string_vector(&current_location, pd.titlewords);
+
+    // resize data vector
+    data_size = (u_int8_t*)current_location - serialized_data.data();
+    serialized_data.resize(data_size);
+
+    pthread_mutex_lock(&PAGE_FILES[rank_file].page_file_mutex);
+
+    // add to page file
+    PAGE_FILES[rank_file].num_pages++;
+    PAGE_FILES[rank_file].size_bytes += data_size;
+    PAGE_FILES[rank_file].page_data_entries.push_back(serialized_data);
+
+    // check if page file is now full
+    if (PAGE_FILES[rank_file].size_bytes > PAGE_FILE_SIZE_BYTES) {
+        pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
+        return 1;
+    }
+
+    pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
+    return 0;
+}
+
+// write specified page file to disk
+int write_page_file(u_int64_t rank_file) {
+    // check for valid rank_file
+    if (rank_file >= NUM_PAGE_FILE_RANKS) {
+        return -1;
+    }
+
+    pthread_mutex_lock(&PAGE_FILES[rank_file].page_file_mutex);
+
+    std::string file_name = DIR_PATH + "crawled_page_data_rank_" + std::to_string(rank_file) + "_num_" + std::to_string(PAGE_FILES[rank_file].num_files_of_this_rank_written);
+    PAGE_FILES[rank_file].num_files_of_this_rank_written++;
+
+    // open file
+    int fd = open(file_name.c_str(), O_WRONLY | O_CREAT);
+    if (fd == -1) {
+        close(fd);
+        pthread_mutex_unlock(&PAGE_FILE_MUTEX);
+        return -1;
+    }
+
+    // write header
+    PageFileHeader header;
+    header.magic_number = CORRECT_MAGIC_NUMBER;
+    header.size_bytes = PAGE_FILES[rank_file].size_bytes;
+    header.num_pages = PAGE_FILES[rank_file].num_pages;
+
+    if (write(fd, &header, sizeof(PageFileHeader)) != sizeof(PageFileHeader)) {
+        close(fd);
+        pthread_mutex_unlock(&PAGE_FILE_MUTEX);
+        return -1;
+    }
+
+    // write page data
+    for (auto &pd : PAGE_FILES[rank_file].page_data_entries) {
+        if (write(fd, pd.data(), pd.size()) != pd.size()) {
+            close(fd);
+            pthread_mutex_unlock(&PAGE_FILE_MUTEX);
+            return -1;
+        }
+    }
+
+    close(fd);
+    pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
+
+    return 0;
+}
+
 // writes a string to buffer and increments buffer past the end of the serialized string
 void serialize_string(void** buffer, const std::string& s){
     u_int16_t size = (s.size() < __UINT16_MAX__) ? s.size() : __UINT16_MAX__;  // strings longer than the uin16 max are automatically truncated
@@ -147,8 +243,8 @@ void serialize_string_vector(void** buffer, const std::vector<std::string>& v) {
     buffer += sizeof(u_int64_t);
 
     // write strings
-    for(u_int64_t i = 0; i < size; i++) {
-        serialize_string(buffer, v[i]);
+    for (auto& s : v) {
+        serialize_string(buffer, s);
     }
 }
 
