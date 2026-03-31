@@ -18,8 +18,11 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+
 add_executable(tests tests/test.cpp)
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
+target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 enable_testing()
 
@@ -28,5 +31,6 @@ include(Catch)
 catch_discover_tests(tests)
 
 # main executable
-add_executable(project src/main.cpp)
+add_executable(engine src/main.cpp)
+target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src)
 

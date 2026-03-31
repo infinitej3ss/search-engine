@@ -1,4 +1,4 @@
-### Search Engine (name pending)
+### ShinkanSearch
 
 A fully-functional (in-progress) search engine written in C++.
 

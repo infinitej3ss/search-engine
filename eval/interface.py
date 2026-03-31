@@ -13,7 +13,7 @@ def parse_search_output(output: str) -> List[str]:
 
     return urls
 
-def get_results(query: str, exe_path: str = "./build/engine", top_k: int = 10) -> List[str]:
+def get_results(query: str, exe_path: str = "build/engine", top_k: int = 10) -> List[str]:
     if not Path(exe_path).exists():
         raise FileNotFoundError(f"executable {exe_path} not found, run make")
 
