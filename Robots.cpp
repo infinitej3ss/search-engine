@@ -1,6 +1,6 @@
 // Robots.cpp
 //
-// Nicole Hamilton, nham@umich.edu
+// Nicky Hamilton, nham@umich.edu
 
 // Simple wrapper to exercise the RobotsTxt class.
 // Works under either Windows or Linux.
