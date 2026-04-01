@@ -1,118 +1,102 @@
+#pragma once
+
+#include <array>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <algorithm>
 
 #include "url_parser.hpp"
 
 // four tiers: top ranked, common commercial, bottom ranked, everything else
-const std::unordered_set<std::string> TOP_RANKED_TLDS = {"gov", "edu"};
-const std::unordered_set<std::string> MIDDLE_RANKED_TLDS = {"com", "org", "net"};
-const std::unordered_set<std::string> BOTTOM_RANKED_TLDS = {"ru", "xyz"};
+inline const std::unordered_set<std::string> TOP_RANKED_TLDS = {"gov", "edu"};
+inline const std::unordered_set<std::string> MIDDLE_RANKED_TLDS = {"com", "org", "net"};
+inline const std::unordered_set<std::string> BOTTOM_RANKED_TLDS = {"ru", "xyz"};
 
 struct RankerInput {
-  // T1
+  // t1
   std::string url;
 
-  // T2
+  // t2
   size_t word_count;
-  float_t content_to_html_ratio;
+  double content_to_html_ratio;
 
-  // T3
+  // t3
   bool is_https;
   size_t pages_per_domain;
   size_t hop_distance;
 };
 
-// tld type
-// url len
-// path depth
-// subdomain depth
-// ip address in url
-// special char density
-// blacklist in url !!! special
-class T1Ranker {
-private:
-  ParsedUrl url;
+// t1 signal functions — each takes a parsed url and returns a score in [0, 1]
 
-  float_t tld_rank() {
-    float_t rank = 0.4; // default
+inline double tld_rank(const ParsedUrl& url) {
+  if (TOP_RANKED_TLDS.contains(url.tld)) return 1.0;
+  if (MIDDLE_RANKED_TLDS.contains(url.tld)) return 0.7;
+  if (BOTTOM_RANKED_TLDS.contains(url.tld)) return 0.1;
+  return 0.4;
+}
 
-    if (TOP_RANKED_TLDS.contains(url.tld)) {
-      rank = 1.0;
-    }
-    else if (MIDDLE_RANKED_TLDS.contains(url.tld)) {
-      rank = 0.7;
-    }
-    else if (BOTTOM_RANKED_TLDS.contains(url.tld)) {
-      rank = 0.1;
-    }
+inline double url_len_rank(const ParsedUrl& url) {
+  return 1.0 / (1.0 + url.len / 80.0);
+}
 
-    return rank;
-  }
+inline double path_depth_rank(const ParsedUrl& url) {
+  return 1.0 / (1.0 + url.path_depth);
+}
 
-  float_t url_len_rank() {
-    size_t len = url.len;
-    return 1.0 / (1.0 + len / 80.0);
-  }
+inline double subdomain_depth_rank(const ParsedUrl& url) {
+  return 1.0 / (1.0 + std::max(0.0, static_cast<double>(url.subdomain_depth) - 1.0));
+}
 
-  float_t path_depth_rank() {
-    return 1.0 / (1.0 + url.path_depth);
-  }
+inline double ip_in_url_rank(const ParsedUrl& url) {
+  return url.ip_in_url ? 0.0 : 1.0;
+}
 
-  float_t subdomain_depth_rank() {
-    return 1.0 / (1.0 + std::max(0.0, url.subdomain_depth - 1.0));
-  }
+inline double special_char_density_rank(const ParsedUrl& url) {
+  return 1.0 - url.special_char_density;
+}
 
-  float_t ip_address_in_url_rank() {
-    return static_cast<float_t>(url.ip_in_url);
-  }
+constexpr size_t T1_NUM_SIGNALS = 6;
 
-  float_t special_char_density_rank() {
-    float_t density = url.special_char_density;
-    return 1.0 - density;
-  }
+using T1SignalFn = double(*)(const ParsedUrl&);
 
-public:
-  T1Ranker(ParsedUrl parsed_url) {
-    url = parsed_url;
-  }
-    
-  float_t rank() {
-    // TODO for now everything is equally weighted, but we may want to weight later
-    float_t sum = tld_rank() + url_len_rank() +
-      path_depth_rank() + subdomain_depth_rank() +
-      ip_address_in_url_rank() + special_char_density_rank();
-
-    // TODO hardcoding for now, probably a better way to do this
-    return sum / 6.0;
-  }
+constexpr std::array<T1SignalFn, T1_NUM_SIGNALS> T1_SIGNALS = {
+  tld_rank,
+  url_len_rank,
+  path_depth_rank,
+  subdomain_depth_rank,
+  ip_in_url_rank,
+  special_char_density_rank,
 };
 
-class T2Ranker {
-private:
-
-public:
-  T2Ranker() {
-  }
-
-  float_t rank() {
-    // TODO
-    return 1.0;
-  }
+// default weights — tune via eval
+inline std::array<double, T1_NUM_SIGNALS> T1_WEIGHTS = {
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0
 };
 
-class T3Ranker {
-private:
+inline double t1_rank(const ParsedUrl& url) {
+  double total = 0.0;
+  double weight_sum = 0.0;
 
-public:
-  T3Ranker() {
+  for (size_t i = 0; i < T1_NUM_SIGNALS; i++) {
+    if (T1_WEIGHTS[i] != 0.0) {
+      total += T1_WEIGHTS[i] * T1_SIGNALS[i](url);
+      weight_sum += T1_WEIGHTS[i];
+    }
   }
 
-  float_t rank() {
-    // TODO
-    return 1.0;
-  }
-};
+  return weight_sum > 0.0 ? total / weight_sum : 0.0;
+}
+
+// TODO t2 — content-based ranking
+inline double t2_rank(const RankerInput& /* input */) {
+  return 1.0;
+}
+
+// TODO t3 — domain/hop-based ranking
+inline double t3_rank(const RankerInput& /* input */) {
+  return 1.0;
+}
 
 class Ranker {
 private:
@@ -120,14 +104,12 @@ private:
   ParsedUrl parsed_url;
 
 public:
-  Ranker(std::string url) {
-    url = url;
+  Ranker(std::string_view url_in) : url(url_in) {
     UrlParser parser(url);
     parsed_url = parser.parse();
   }
 
-  float_t rank() {
-    T1Ranker t1(parsed_url);
-    return t1.rank();
+  double rank() {
+    return t1_rank(parsed_url);
   }
 };
