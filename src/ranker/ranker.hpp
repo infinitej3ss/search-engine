@@ -100,16 +100,18 @@ inline double t3_rank(const RankerInput& /* input */) {
 
 class Ranker {
 private:
-  std::string url;
+  RankerInput input;
   ParsedUrl parsed_url;
 
 public:
-  Ranker(std::string_view url_in) : url(url_in) {
-    UrlParser parser(url);
+  Ranker(const RankerInput& input_in) : input(input_in) {
+    UrlParser parser(input.url);
     parsed_url = parser.parse();
   }
 
   double rank() {
     return t1_rank(parsed_url);
+
+    // TODO add t2, t3 later
   }
 };
