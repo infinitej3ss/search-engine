@@ -79,3 +79,21 @@ void serialize_string_vector(void** buffer, const std::vector<std::string>& v);
 
 // reads a vector of strings from buffer and increments buffer past the end of the vector
 std::vector<std::string> deserialize_string_vector(void** buffer);
+
+// initializes the page file directory specified for writing
+//
+// Parameters:
+//      dir - directory to initialize from
+//
+// Returns:
+//      0 on success, -1 on failure
+int initialize_page_file_dir(const std::string& dir);
+
+// get the names of page files in the specified directory
+//
+// Parameters:
+//      dir - directory to parse
+//
+// Returns:
+//      a 2D vector where the first index corresponds to rank and the second stores the file names
+std::vector<std::vector<std::string>> get_page_file_names(const std::string& dir);

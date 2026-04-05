@@ -1,5 +1,6 @@
 #include "page_data.h"
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -275,6 +276,91 @@ std::vector<std::string> deserialize_string_vector(void** buffer) {
     // read strings
     for(u_int64_t i = 0; i < size; i++) {
         v.at(i) = deserialize_string(buffer);
+    }
+
+    return std::move(v);
+}
+
+// find rank of a given page file name
+//
+// returns __INT64_MAX__ if the page is invalid
+u_int64_t get_page_file_rank(std::string& file_name) {
+    if (file_name.length() < std::string("crawled_page_data_rank_x").length()) {
+        return __INT64_MAX__;
+    }
+
+    u_int64_t index = std::string("crawled_page_data_rank_").length();  // location the number should start at
+
+    // search until finding the end of the rank number
+    while (index < file_name.length() && file_name[index] != '_') {
+        index++;
+    }
+
+    if (index == file_name.length() || file_name[index] != '_') {
+        return __INT64_MAX__;
+    }
+
+    std::string rank(file_name.begin() + std::string("crawled_page_data_rank_").length(), file_name.begin() + index);
+
+    return atoi(rank.c_str());
+}
+
+// initializes the page file directory specified for writing
+int initialize_page_file_dir(const std::string& dir) {
+    DIR* dir_ptr;
+    struct dirent* ent;
+
+    // open dir
+    if ((dir_ptr = opendir(dir.c_str())) == NULL) {
+        return -1;
+    }
+    DIR_PATH = dir;
+
+    // iterate through files in dir
+    while ((ent = readdir(dir_ptr)) != NULL) {
+        std::string file_name(ent->d_name);
+
+        u_int64_t rank = get_page_file_rank(file_name);
+        if (rank == __INT64_MAX__) {  // invalid file
+            continue;
+        }
+
+        if (rank >= NUM_PAGE_FILE_RANKS) {
+            continue;
+        }
+
+        // increment files counter
+        PAGE_FILES[rank].num_files_of_this_rank_written++;
+    }
+
+    return 0;
+}
+
+// get the names of page files in the specified directory
+std::vector<std::vector<std::string>> get_page_file_names(const std::string& dir) {
+    DIR* dir_ptr;
+    struct dirent* ent;
+    std::vector<std::vector<std::string>> v(NUM_PAGE_FILE_RANKS);
+
+    // open dir
+    if ((dir_ptr = opendir(dir.c_str())) == NULL) {
+        return std::move(v);
+    }
+
+    // iterate through files in dir
+    while ((ent = readdir(dir_ptr)) != NULL) {
+        std::string file_name(ent->d_name);
+
+        u_int64_t rank = get_page_file_rank(file_name);
+        if (rank == __INT64_MAX__) {  // invalid file
+            continue;
+        }
+
+        if (rank >= NUM_PAGE_FILE_RANKS) {
+            continue;
+        }
+
+        v[rank].push_back(dir + file_name);
     }
 
     return std::move(v);
