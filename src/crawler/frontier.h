@@ -9,10 +9,16 @@ struct FrontierUrl {
 };
 
 // inserts url into the frontier
-void insert_url(FrontierUrl& url);
+//
+// Returns:
+//      0 on success, -1 on failure
+int insert_url(FrontierUrl& url);
 
 // insert vector of urls
-void insert_url_vector(std::vector<FrontierUrl> url_vector);
+//
+// Returns:
+//      0 on success, -1 on failure
+int insert_url_vector(std::vector<FrontierUrl>& url_vector);
 
 // adds a url's domain to blacklist, preventing it from being inserted or retreived from the frontier
 void blacklist_domain(std::string &url);
@@ -25,3 +31,12 @@ void serialize_frontier_url_vector(void** buffer, const std::vector<FrontierUrl>
 
 // reads a vector of FrontierUrls from buffer and increments buffer past the end of the vector
 std::vector<FrontierUrl> deserialize_frontier_url_vector(void** buffer);
+
+// initializes the frontier file directory
+//
+// Parameters:
+//      dir - directory to initialize from
+//
+// Returns:
+//      0 on success, -1 on failure
+int initialize_frontier_file_dir(const std::string& dir);
