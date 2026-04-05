@@ -1,9 +1,8 @@
-#pragma once
-
 #include "page_data.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <cstring>
@@ -14,6 +13,7 @@ const u_int64_t MAX_PAGE_FILE_SIZE_BYTES = 200000000;       // 200MB
 const u_int64_t CORRECT_MAGIC_NUMBER = 863404304674789781;  // magic number for page file
 
 void* MAPPED_PAGE_FILE;
+u_int64_t MAPPED_PAGE_FILE_SIZE = 0;
 void* CURRENT_PAGE_FILE_LOCATION;
 bool VALID_PAGE_FILE = false;
 u_int64_t NUM_PAGE_FILE_ENTRIES = 0;
@@ -29,7 +29,7 @@ int load_page_file(const std::string& file_name) {
 
     // make sure any previous file is closed
     if (VALID_PAGE_FILE) {
-        munmap(MAPPED_PAGE_FILE, PAGE_FILE_SIZE_BYTES);
+        munmap(MAPPED_PAGE_FILE, MAPPED_PAGE_FILE_SIZE);
         VALID_PAGE_FILE = false;
     }
 
@@ -58,8 +58,13 @@ int load_page_file(const std::string& file_name) {
     NUM_PAGE_FILE_ENTRIES = file_header.num_pages;
     PAGE_FILE_SIZE_BYTES = file_header.size_bytes;
 
+    struct stat statbuf;
+    fstat(fd, &statbuf);
+    MAPPED_PAGE_FILE_SIZE = statbuf.st_size;
+
     // create memory mapping
-    MAPPED_PAGE_FILE, CURRENT_PAGE_FILE_LOCATION = mmap(NULL, PAGE_FILE_SIZE_BYTES, PROT_READ, 0, fd, 0);
+    MAPPED_PAGE_FILE = mmap(NULL, MAPPED_PAGE_FILE_SIZE, PROT_READ, MAP_SHARED, fd, 0);
+    CURRENT_PAGE_FILE_LOCATION = MAPPED_PAGE_FILE + sizeof(PageFileHeader);
     close(fd);
     if(MAPPED_PAGE_FILE == MAP_FAILED) {
         pthread_mutex_unlock(&PAGE_FILE_MUTEX);
@@ -74,7 +79,7 @@ int load_page_file(const std::string& file_name) {
 void close_page_file() {
     pthread_mutex_lock(&PAGE_FILE_MUTEX);
     if (VALID_PAGE_FILE) {
-        munmap(MAPPED_PAGE_FILE, PAGE_FILE_SIZE_BYTES);
+        munmap(MAPPED_PAGE_FILE, MAPPED_PAGE_FILE_SIZE);
         VALID_PAGE_FILE = false;
     }
     pthread_mutex_unlock(&PAGE_FILE_MUTEX);
@@ -123,6 +128,7 @@ int write_page(u_int64_t rank_file, PageData& pd) {
     }
 
     u_int64_t data_size = sizeof(SerializedPageDataHeader) + 2 * sizeof(u_int64_t);
+    data_size += sizeof(u_int16_t) + pd.url.size();
     for(auto &word : pd.titlewords) {
         data_size += sizeof(u_int16_t) + word.size();
     }
@@ -178,7 +184,7 @@ int write_page_file(u_int64_t rank_file) {
     PAGE_FILES[rank_file].num_files_of_this_rank_written++;
 
     // open file
-    int fd = open(file_name.c_str(), O_WRONLY | O_CREAT);
+    int fd = open(file_name.c_str(), O_WRONLY | O_CREAT, S_IRWXU);
     if (fd == -1) {
         close(fd);
         pthread_mutex_unlock(&PAGE_FILE_MUTEX);
@@ -218,11 +224,11 @@ void serialize_string(void** buffer, const std::string& s){
 
     // write size of string
     memcpy(*buffer, &size, sizeof(u_int16_t));
-    buffer += sizeof(u_int16_t);
+    *buffer += sizeof(u_int16_t);
 
     // write contents of string
     memcpy(*buffer, s.data(), size);
-    buffer += size;
+    *buffer += size;
 }
 
 // reads serialized string from buffer and increments buffer past the end of the string
@@ -232,12 +238,12 @@ std::string deserialize_string(void** buffer) {
 
     // resize string to serialized value
     memcpy(&size, *buffer, sizeof(u_int16_t));
-    buffer += sizeof(u_int16_t);
+    *buffer += sizeof(u_int16_t);
     s.resize(size);
 
     // read contents of string
     memcpy(s.data(), *buffer, size);
-    buffer += size;
+    *buffer += size;
 
     return std::move(s);
 }
@@ -248,7 +254,7 @@ void serialize_string_vector(void** buffer, const std::vector<std::string>& v) {
 
     // write size of vector
     memcpy(*buffer, &size, sizeof(u_int64_t));
-    buffer += sizeof(u_int64_t);
+    *buffer += sizeof(u_int64_t);
 
     // write strings
     for (auto& s : v) {
@@ -263,12 +269,12 @@ std::vector<std::string> deserialize_string_vector(void** buffer) {
 
     // resize vector to serialized value
     memcpy(&size, *buffer, sizeof(u_int64_t));
-    buffer += sizeof(u_int64_t);
+    *buffer += sizeof(u_int64_t);
     v.resize(size);
 
     // read strings
     for(u_int64_t i = 0; i < size; i++) {
-        v.push_back(deserialize_string(buffer));
+        v.at(i) = deserialize_string(buffer);
     }
 
     return std::move(v);
