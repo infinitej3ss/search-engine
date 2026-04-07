@@ -38,25 +38,25 @@ const u_int64_t NUM_URLS_PER_FILE = 10000;
 FrontierQueue FRONTIER_QUEUES[NUM_FRONTIER_QUEUES];
 FrontierStagingFileQueue STAGING_FILE_QUEUES[NUM_FRONTIER_QUEUES];
 FrontierStagingVector STAGING_VECTORS[NUM_FRONTIER_QUEUES];
-Bloomfilter BLACKLIST(300000000, 0.0001);
+Bloomfilter BLACKLIST(10000000, 0.05);
 std::string BLACKLIST_TAG = "frontier_blacklist";
-Bloomfilter SEEN(300000000, 0.0001);
+Bloomfilter SEEN(50000000, 0.05);
 std::string SEEN_TAG = "frontier_seen";
 std::random_device rd;
 std::mt19937 gen(rd());
 std::geometric_distribution<> random_gen;
 
 pthread_mutex_t FRONTIER_IO_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-std::string DIR_PATH = "./";
+std::string FRONTIER_DIR_PATH = "./";
 
-int write_frontier_filters() {
+void write_frontier_filters() {
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     BLACKLIST.write_data(BLACKLIST_TAG);
     SEEN.write_data(SEEN_TAG);
     pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
 }
 
-int load_frontier_filters() {
+void load_frontier_filters() {
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     BLACKLIST.load_data(BLACKLIST_TAG);
     SEEN.load_data(SEEN_TAG);
@@ -71,7 +71,8 @@ bool is_in_blacklist(std::string &url) {
     }
     do {
         pos = url.find('/', pos + 1);
-        if(BLACKLIST.contains(url.substr(0, (pos == std::string_view::npos) ? std::string_view::npos : pos + 1))) {
+        if (BLACKLIST.contains(url.substr(0, (pos == std::string_view::npos) ? std::string_view::npos : pos))
+            || BLACKLIST.contains(url.substr(0, (pos == std::string_view::npos) ? std::string_view::npos : pos + 1))) {
             return true;
         }
     } while(pos != std::string_view::npos);
@@ -100,7 +101,7 @@ int insert_url(FrontierUrl& url) {
     // determine rank of url
     u_int64_t rank = 0;
     if (rank > NUM_FRONTIER_QUEUES) {
-        return;
+        return -1;
     }
 
     // place in corresponding staging vector
@@ -111,7 +112,7 @@ int insert_url(FrontierUrl& url) {
     // if vector is full, write to disk and add to file queue
     if (STAGING_VECTORS[rank].data.size() > NUM_URLS_PER_FILE) {
         // write to disk
-        std::string file_name = DIR_PATH + "frontier_file_rank_" + std::to_string(rank) + "_num_" + std::to_string(STAGING_VECTORS[rank].num_written);
+        std::string file_name = FRONTIER_DIR_PATH + "frontier_file_rank_" + std::to_string(rank) + "_num_" + std::to_string(STAGING_VECTORS[rank].num_written);
 
         u_int64_t file_size = serialized_frontier_url_vector_size(STAGING_VECTORS[rank].data);
 
@@ -317,7 +318,7 @@ int initialize_frontier_file_dir(const std::string& dir) {
     if ((dir_ptr = opendir(dir.c_str())) == NULL) {
         return -1;
     }
-    DIR_PATH = dir;
+    FRONTIER_DIR_PATH = dir;
 
     // iterate through files in dir
     while ((ent = readdir(dir_ptr)) != NULL) {

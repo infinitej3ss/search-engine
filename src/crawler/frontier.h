@@ -44,6 +44,6 @@ int initialize_frontier_file_dir(const std::string& dir);
 // calculates size of a vector of frontier urls after serialization
 u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl> &v);
 
-int write_frontier_filters();
+void write_frontier_filters();
 
-int load_frontier_filters();
+void load_frontier_filters();

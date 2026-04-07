@@ -17,12 +17,14 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(Catch2)
+find_package(OpenSSL COMPONENTS SSL)
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
 add_executable(tests ${TEST_SOURCES})
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(tests PRIVATE OpenSSL::SSL)
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 enable_testing()
