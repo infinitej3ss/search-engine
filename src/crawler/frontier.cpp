@@ -62,10 +62,7 @@ int insert_url(FrontierUrl& url) {
         // write to disk
         std::string file_name = DIR_PATH + "frontier_file_rank_" + std::to_string(rank) + "_num_" + std::to_string(STAGING_VECTORS[rank].num_written);
 
-        u_int64_t file_size = sizeof(u_int64_t);
-        for (auto& frontier_url : STAGING_VECTORS[rank].data) {
-            file_size += sizeof(u_int32_t) + frontier_url.url.size();
-        }
+        u_int64_t file_size = serialized_frontier_url_vector_size(STAGING_VECTORS[rank].data);
 
         char* buffer = new char[file_size];
         serialize_frontier_url_vector((void**)&buffer, STAGING_VECTORS[rank].data);
@@ -230,4 +227,13 @@ int initialize_frontier_file_dir(const std::string& dir) {
     }
 
     return 0;
+}
+
+// calculates size of a vector of frontier urls after serialization
+u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl>& v) {
+    u_int64_t file_size = sizeof(u_int64_t);
+    for (auto& frontier_url : v) {
+        file_size += sizeof(u_int32_t) + frontier_url.url.size();
+    }
+    return file_size;
 }
