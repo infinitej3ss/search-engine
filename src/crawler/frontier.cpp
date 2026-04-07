@@ -7,7 +7,9 @@
 #include <cstring>
 #include <queue>
 #include <utility>
+#include <string_view>
 
+#include "BloomFilter.h"
 #include "page_data.h"
 
 // stores a queue of frontier urls
@@ -35,14 +37,59 @@ const u_int64_t NUM_URLS_PER_FILE = 10000;
 FrontierQueue FRONTIER_QUEUES[NUM_FRONTIER_QUEUES];
 FrontierStagingFileQueue STAGING_FILE_QUEUES[NUM_FRONTIER_QUEUES];
 FrontierStagingVector STAGING_VECTORS[NUM_FRONTIER_QUEUES];
+Bloomfilter BLACKLIST(300000000, 0.0001);
+std::string BLACKLIST_TAG = "frontier_blacklist";
+Bloomfilter SEEN(300000000, 0.0001);
+std::string SEEN_TAG = "frontier_seen";
 
 pthread_mutex_t FRONTIER_IO_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 std::string DIR_PATH = "./";
+
+int write_frontier_filters() {
+    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
+    BLACKLIST.write_data(BLACKLIST_TAG);
+    SEEN.write_data(SEEN_TAG);
+    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+}
+
+int load_frontier_filters() {
+    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
+    BLACKLIST.load_data(BLACKLIST_TAG);
+    SEEN.load_data(SEEN_TAG);
+    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+}
+
+// tests url against blacklist by iterating though root paths
+bool is_in_blacklist(std::string &url) {
+    size_t pos = 7; // skip initial https://
+    if(url.length() < 8) {
+        return BLACKLIST.contains(url);
+    }
+    do {
+        pos = url.find('/', pos + 1);
+        if(BLACKLIST.contains(url.substr(0, (pos == std::string_view::npos) ? std::string_view::npos : pos + 1))) {
+            return true;
+        }
+    } while(pos != std::string_view::npos);
+    return false;
+}
 
 // inserts url into the frontier
 int insert_url(FrontierUrl& url) {
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     // check url against already seen and blacklisted domains bloom filters
+    if(SEEN.contains(url.url)) {
+        pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+        return -1;
+    }
+
+    if (is_in_blacklist(url.url)) {
+        pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+        return -1;
+    }
+
+    // add to seen filter
+    SEEN.insert(url.url);
 
     pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
 
@@ -108,8 +155,10 @@ int insert_url_vector(std::vector<FrontierUrl>& url_vector) {
 
 // adds url to blacklist, preventing it from being inserted or retreived from the frontier
 void blacklist_url(std::string& url) {
-    // TODO: implement
-    return;
+    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
+    size_t special_char = url.find_first_of("&%#+;@");
+    BLACKLIST.insert(url.substr(0, special_char));
+    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
 }
 
 // retreives url from the frontier
