@@ -40,3 +40,6 @@ std::vector<FrontierUrl> deserialize_frontier_url_vector(void** buffer);
 // Returns:
 //      0 on success, -1 on failure
 int initialize_frontier_file_dir(const std::string& dir);
+
+// calculates size of a vector of frontier urls after serialization
+u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl> &v);
