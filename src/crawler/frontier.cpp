@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <random>
 #include <queue>
 #include <utility>
 #include <string_view>
@@ -41,6 +42,9 @@ Bloomfilter BLACKLIST(300000000, 0.0001);
 std::string BLACKLIST_TAG = "frontier_blacklist";
 Bloomfilter SEEN(300000000, 0.0001);
 std::string SEEN_TAG = "frontier_seen";
+std::random_device rd;
+std::mt19937 gen(rd());
+std::geometric_distribution<> random_gen;
 
 pthread_mutex_t FRONTIER_IO_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 std::string DIR_PATH = "./";
@@ -163,10 +167,71 @@ void blacklist_url(std::string& url) {
 
 // retreives url from the frontier
 FrontierUrl get_url() {
-    // TODO: implement
-    FrontierUrl frontier_url;
-    frontier_url.distance_from_seedlist = 0;
-    frontier_url.url = "https://www.google.com";
+    // pick queue at random
+    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
+    u_int64_t queue_num = random_gen(gen);
+    if (queue_num >= NUM_FRONTIER_QUEUES) {
+        queue_num = 0;
+    }
+    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+
+    // pull url from queue
+    pthread_mutex_lock(&FRONTIER_QUEUES[queue_num].mutex);
+
+    // load queue from file if empty
+    if(FRONTIER_QUEUES[queue_num].data.empty()) {
+        pthread_mutex_lock(&STAGING_FILE_QUEUES[queue_num].mutex);
+        if(STAGING_FILE_QUEUES[queue_num].data.empty()) {
+            // try another queue
+            pthread_mutex_unlock(&STAGING_FILE_QUEUES[queue_num].mutex);
+            pthread_mutex_unlock(&FRONTIER_QUEUES[queue_num].mutex);
+            return get_url();
+        }
+
+        // load file
+        std::string file_name = STAGING_FILE_QUEUES[queue_num].data.front();
+        STAGING_FILE_QUEUES[queue_num].data.pop();
+        pthread_mutex_unlock(&STAGING_FILE_QUEUES[queue_num].mutex);
+
+        int fd = open(file_name.c_str(), O_WRONLY, S_IRWXU);
+        if(fd == -1) {
+            close(fd);
+            // try another queue
+            pthread_mutex_unlock(&FRONTIER_QUEUES[queue_num].mutex);
+            return get_url();
+        }
+
+        struct stat statbuf;
+        fstat(fd, &statbuf);
+        u_int64_t file_size = statbuf.st_size;
+
+        char* buf = new char[file_size];
+        read(fd, buf, file_size);
+        std::vector<FrontierUrl> urls = deserialize_frontier_url_vector((void**)&buf);
+        delete[] buf;
+
+        for(auto &u : urls) {
+            FRONTIER_QUEUES[queue_num].data.push(u);
+        }
+        close(fd);
+
+        // delete file
+        remove(file_name.c_str());
+    }
+
+    FrontierUrl frontier_url = FRONTIER_QUEUES[queue_num].data.front();
+    FRONTIER_QUEUES[queue_num].data.pop();
+
+    pthread_mutex_unlock(&FRONTIER_QUEUES[queue_num].mutex);
+
+    // check against blacklist
+    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
+    if(is_in_blacklist(frontier_url.url)) {
+        pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+        return get_url();
+    }
+    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+
     return std::move(frontier_url);
 }
 

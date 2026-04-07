@@ -20,8 +20,8 @@ int insert_url(FrontierUrl& url);
 //      0 on success, -1 on failure
 int insert_url_vector(std::vector<FrontierUrl>& url_vector);
 
-// adds a url's domain to blacklist, preventing it from being inserted or retreived from the frontier
-void blacklist_domain(std::string &url);
+// adds a url to blacklist, preventing it from being inserted or retreived from the frontier
+void blacklist_url(std::string &url);
 
 // retreives url from the frontier
 FrontierUrl get_url();
