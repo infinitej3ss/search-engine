@@ -52,7 +52,7 @@ void run_worker_thread() {
             URL_destination URL_dest = get_URL_destination(link.URL);
 
             if (URL_dest == frontier){ // if URL is for frontier
-                FrontierUrl frontier_url = {new_dist_from_seedlist, link.URL}; // TODO: where can dist from seedlist be accessed?
+                FrontierUrl frontier_url = {new_dist_from_seedlist, link.URL};
                 insert_url(frontier_url);
             } else {                   // if URL is for a remote host
                 int destHost = URL_to_destination(link.URL);
