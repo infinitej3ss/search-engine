@@ -10,5 +10,4 @@ int main(int argc, char** argv){
         endpoints.push_back(argv[i]);
     }
 
-    
 }
