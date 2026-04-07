@@ -44,9 +44,20 @@ void run_worker_thread() {
 
         // distribute links
         // disable killing
+
+        int new_dist_from_seedlist = frontier_url.distance_from_seedlist + 1;
         for(auto &link : parsed_html.links) {
             // NOTE: do we pass anchor text to the other machines too?
-            process_new_url(link.URL, frontier_url.distance_from_seedlist + 1);
+            
+            URL_destination URL_dest = get_URL_destination(link.URL);
+
+            if (URL_dest == frontier){ // if URL is for frontier
+                FrontierUrl frontier_url = {new_dist_from_seedlist, link.URL}; // TODO: where can dist from seedlist be accessed?
+                insert_url(frontier_url);
+            } else {                   // if URL is for a remote host
+                int destHost = URL_to_destination(link.URL);
+                send_URL_to_remote_host(link.URL, new_dist_from_seedlist, destHost);
+            }
         }
 
         // store data
