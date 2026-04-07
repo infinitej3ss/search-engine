@@ -1,12 +1,19 @@
 #include "get_ssl.h"
+#include "robots.txt/RobotsTxt.h"
+
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <openssl/ssl.h>
-
 #include <iostream>
+#include <unordered_map>
+
+std::string USER_AGENT = "Jess Morton/1.0 (mortonjs@umich.edu)";
+
+// Robots.txt cache
+std::unordered_map<std::string, RobotsCacheEntry> robotsCache;
 
 // take a URL and return the HTML
 get_ssl_return get_ssl(std::string &input_url, std::string &page){
@@ -98,7 +105,7 @@ get_ssl_return get_ssl(std::string &input_url, std::string &page){
     request += "\r\n";
 
     // User-Agent - My info
-    request += "User-Agent: YaireLopezqui/1.0 (lopezqui@umich.edu)\r\n";
+    request += "User-Agent: " + USER_AGENT + "\r\n";
 
     // Accept Header
     request += "Accept: */*\r\n";    // Accept anything

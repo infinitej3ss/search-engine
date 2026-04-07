@@ -24,3 +24,6 @@ struct Peer {
     
     std::vector<FrontierUrl> url_send_buffer; // Data waiting to be sent
 };
+
+// add endpoints from config file to endpoints vector
+void add_endpoints(std::string& config_file);

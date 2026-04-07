@@ -1,6 +1,9 @@
 #pragma once
 
-#include "string"
+#include "robots.txt/RobotsTxt.h"
+#include "string.h"
+#include <chrono>
+#include <memory>
 
 enum get_ssl_return {
     failure,
@@ -8,6 +11,17 @@ enum get_ssl_return {
     success
 };
 
+enum robots_cache_status {
+    exists,
+    does_not_exist,
+    not_yet_fetched
+};
+
+struct RobotsCacheEntry {
+    std::unique_ptr<RobotsTxt> robotsObject;
+    // when to fetch the next page from this domain? (useful for crawl delay)
+    std::chrono::steady_clock::time_point nextAllowedPageFetch; 
+};
 
 class ParsedUrl {
    public:
@@ -80,6 +94,18 @@ class ParsedUrl {
         char *pathBuffer;
 };
 
-
 // take a URL and return the HTML
 get_ssl_return get_ssl(std::string& url, std::string& page);
+
+// used to get the root domain for a given URL (useful for robots.txt cache)
+std::string extract_domain(std::string& url);
+
+// returns whether a given domain's robots.txt has been fetched, has not, or doesn't exist
+robots_cache_status get_robots_cache_status(std::string& domain);
+
+// attempts to get the robots.txt file for a given page
+// true = found a file | false = did not
+bool get_robots_file(std::string& domain);
+
+// will create an entry in robotsCache associated with the supplied domain and file
+void add_robots_to_cache(std::string& robots_file, std::string& domain);
