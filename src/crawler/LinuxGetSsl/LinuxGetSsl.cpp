@@ -7,14 +7,12 @@
 
 #include <iostream>
 
-class ParsedUrl
-   {
+class ParsedUrl {
    public:
       const char *CompleteUrl;
       char *Service, *Host, *Port, *Path;
 
-      ParsedUrl( const char *url )
-         {
+      ParsedUrl( const char *url ) {
          // Assumes url points to static text but
          // does not check.
 
@@ -78,10 +76,9 @@ class ParsedUrl
 
    private:
       char *pathBuffer;
-   };
+        };
 
-int main( int argc, char **argv )
-   {
+int main( int argc, char **argv ) {
 
    if ( argc != 2 )
       {
@@ -227,7 +224,7 @@ int main( int argc, char **argv )
       int bytesRead;
       while ((bytesRead = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
          write(STDOUT_FILENO, buffer, bytesRead);
-      }
+      
    }
 
    // Close the socket and free the address info structure.
@@ -236,4 +233,5 @@ int main( int argc, char **argv )
    close(socketFD);
    SSL_CTX_free(ctx);
 
-   }
+    }
+}
