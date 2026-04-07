@@ -1,14 +1,25 @@
+#pragma once
+
 #ifndef BLOOMFILTER_H
 #define BLOOMFILTER_H
 
+#include <fcntl.h>
 #include <openssl/evp.h>
 #include <openssl/md5.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <bitset>
 #include <cmath>
 #include <string>
 #include <vector>
+
+std::string DIR_PATH = "./";
+
+void initialize_bloom_filter_dir(std::string &dir) {
+    DIR_PATH = dir;
+}
 
 class Bloomfilter {
     public:
@@ -55,11 +66,73 @@ class Bloomfilter {
             return true;  // If all bits were true, the string is likely inserted, but false positive is possible.
         }   
 
+        int write_data(std::string &tag) {
+            std::string file_name = DIR_PATH + tag + "_bloom_data";
+
+            // open file
+            int fd = open(file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+            if (fd == -1) {
+                close(fd);
+                return -1;
+            }
+
+            // write size
+            if(write(fd, &filterSize, sizeof(u_int64_t)) != sizeof(u_int64_t)) {
+                close(fd);
+                return -1;
+            }
+
+            // write data
+            bool *buf = new bool[filterSize];
+            for (size_t i = 0; i < filterSize; i++) {
+                buf[i] = filter[i];
+            }
+
+            write(fd, buf, filterSize);
+
+            delete[] buf;
+            return 0;
+        }
+
+        int load_data(std::string &tag) {
+            std::string file_name = DIR_PATH + tag + "_bloom_data";
+
+            // open file
+            int fd = open(file_name.c_str(), O_WRONLY, S_IRWXU);
+            if (fd == -1) {
+                close(fd);
+                return -1;
+            }
+
+            struct stat statbuf;
+            fstat(fd, &statbuf);
+            u_int64_t file_size = statbuf.st_size;
+
+            // read size
+            if (read(fd, &filterSize, sizeof(u_int64_t)) != sizeof(u_int64_t)) {
+                close(fd);
+                return -1;
+            }
+
+            // read data
+            filter.resize(filterSize);
+            bool* buf = new bool[filterSize];
+
+            read(fd, buf, file_size - sizeof(u_int64_t));
+
+            for (size_t i = 0; i < filterSize; i++) {
+                filter[i] = buf[i];
+            }
+
+            delete[] buf;
+            return 0;
+        }
+
         private:
         // Add any private member variables that may be neccessary.
 
         std::vector<bool> filter;
-        size_t filterSize;
+        u_int64_t filterSize;
         int numHashes;
 
         std::pair<uint64_t, uint64_t> hash( const std::string &datum ) {
