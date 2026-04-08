@@ -47,3 +47,6 @@ u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl> &v)
 void write_frontier_filters();
 
 void load_frontier_filters();
+
+// inserts url manually into frontier, skipping writing to file
+void insert_seed_list(FrontierUrl &u);

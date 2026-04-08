@@ -352,3 +352,8 @@ u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl>& v)
     }
     return file_size;
 }
+
+void insert_seed_list(FrontierUrl& u) {
+    SEEN.insert(u.url);
+    FRONTIER_QUEUES[0].data.push(u);
+}
