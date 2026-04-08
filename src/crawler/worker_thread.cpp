@@ -25,7 +25,7 @@ void run_worker_thread() {
         }
         if (ssl_status == blacklist) {
             // disable killing 
-            blacklist_domain(frontier_url.url);
+            blacklist_url(frontier_url.url);
             // enable killing
             continue;
         }
@@ -62,7 +62,12 @@ void run_worker_thread() {
 
         // store data
         int write_status = write_page(rank, page_data);
-        // TODO: handle write status
+        if(write_status == 1) {
+            write_page_file(rank);
+            if(rank == 0) {
+                write_frontier_filters();
+            }
+        }
         // NOTE: probably store anchor text in hash tables, saving to disk when too large -> pass over tables after crawling and save as page files
 
         // enable killing

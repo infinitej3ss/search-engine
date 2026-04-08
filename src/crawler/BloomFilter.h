@@ -17,7 +17,7 @@
 
 std::string BLOOM_DIR_PATH = "./";
 
-void initialize_bloom_filter_dir(std::string &dir) {
+void initialize_bloom_filter_dir(const std::string &dir) {
     BLOOM_DIR_PATH = dir;
 }
 
