@@ -6,16 +6,15 @@
 #include <vector>
 #include <netinet/in.h>
 
-std::vector<std::string> endpoints;
+std::vector<Peer> peers;
 
-enum class ConnectionState {
+enum ConnectionState {
     DISCONNECTED,
     CONNECTING,
     CONNECTED
 };
 
 struct Peer {
-    std::string node_id;      // A logical name for the machine (e.g., "Worker-1")
     std::string ip_address;   // To know where to reconnect
     int port;                 // To know where to reconnect
     
@@ -26,4 +25,7 @@ struct Peer {
 };
 
 // add endpoints from config file to endpoints vector
-void add_endpoints(std::string& config_file);
+void initialize_peers(std::string& config_file);
+
+// block until all peers have confirmed their connection
+void establish_peer_connections();
