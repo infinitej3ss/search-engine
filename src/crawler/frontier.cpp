@@ -249,6 +249,7 @@ void serialize_frontier_url_vector(void** buffer, const std::vector<FrontierUrl>
         memcpy(*buffer, &s.distance_from_seedlist, sizeof(u_int32_t));
         *buffer += sizeof(u_int32_t);
         serialize_string(buffer, s.url);
+        serialize_string_vector(buffer, s.anchor_text);
     }
 }
 
@@ -267,6 +268,7 @@ std::vector<FrontierUrl> deserialize_frontier_url_vector(void** buffer) {
         memcpy(&v.at(i).distance_from_seedlist, *buffer, sizeof(u_int32_t));
         *buffer += sizeof(u_int32_t);
         v.at(i).url = deserialize_string(buffer);
+        v.at(i).anchor_text = deserialize_string_vector(buffer);
     }
 
     return std::move(v);
@@ -348,7 +350,10 @@ int initialize_frontier_file_dir(const std::string& dir) {
 u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl>& v) {
     u_int64_t file_size = sizeof(u_int64_t);
     for (auto& frontier_url : v) {
-        file_size += sizeof(u_int32_t) + frontier_url.url.size();
+        file_size += sizeof(u_int32_t) + frontier_url.url.size() + sizeof(u_int64_t);
+        for(auto& word : frontier_url.anchor_text) {
+            file_size += sizeof(u_int16_t) + word.size();
+        }
     }
     return file_size;
 }

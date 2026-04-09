@@ -6,6 +6,7 @@
 struct FrontierUrl {
     u_int32_t distance_from_seedlist;
     std::string url;
+    std::vector<std::string> anchor_text;
 };
 
 // inserts url into the frontier

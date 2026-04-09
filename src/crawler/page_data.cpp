@@ -21,6 +21,9 @@ u_int64_t NUM_PAGE_FILE_ENTRIES = 0;
 u_int64_t PAGE_FILE_SIZE_BYTES = 0;
 pthread_mutex_t PAGE_FILE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
+u_int64_t NUM_CRAWLED_PAGES = 0;
+pthread_mutex_t NUM_CRAWLED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
 PageFile PAGE_FILES[NUM_PAGE_FILE_RANKS];
 std::string DIR_PATH = "./";  // TODO: function to initialize this path and page file's number written
 
@@ -114,6 +117,7 @@ int get_next_page(PageData& pd) {
     pd.url = deserialize_string(&CURRENT_PAGE_FILE_LOCATION);
     pd.words = deserialize_string_vector(&CURRENT_PAGE_FILE_LOCATION);
     pd.titlewords = deserialize_string_vector(&CURRENT_PAGE_FILE_LOCATION);
+    pd.anchor_text = deserialize_string_vector(&CURRENT_PAGE_FILE_LOCATION);
 
     NUM_PAGE_FILE_ENTRIES--;
     
@@ -128,12 +132,19 @@ int write_page(u_int64_t rank_file, PageData& pd) {
         return -1;
     }
 
+    pthread_mutex_lock(&NUM_CRAWLED_MUTEX);
+    NUM_CRAWLED_PAGES++;
+    pthread_mutex_unlock(&NUM_CRAWLED_MUTEX);
+
     u_int64_t data_size = sizeof(SerializedPageDataHeader) + 2 * sizeof(u_int64_t);
     data_size += sizeof(u_int16_t) + pd.url.size();
     for(auto &word : pd.titlewords) {
         data_size += sizeof(u_int16_t) + word.size();
     }
     for (auto& word : pd.words) {
+        data_size += sizeof(u_int16_t) + word.size();
+    }
+    for (auto& word : pd.anchor_text) {
         data_size += sizeof(u_int16_t) + word.size();
     }
 
@@ -148,6 +159,7 @@ int write_page(u_int64_t rank_file, PageData& pd) {
     serialize_string(&current_location, pd.url);
     serialize_string_vector(&current_location, pd.words);
     serialize_string_vector(&current_location, pd.titlewords);
+    serialize_string_vector(&current_location, pd.anchor_text);
 
     // resize data vector
     data_size = (u_int8_t*)current_location - serialized_data.data();
@@ -188,7 +200,7 @@ int write_page_file(u_int64_t rank_file) {
     int fd = open(file_name.c_str(), O_WRONLY | O_CREAT, S_IRWXU);
     if (fd == -1) {
         close(fd);
-        pthread_mutex_unlock(&PAGE_FILE_MUTEX);
+        pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
         return -1;
     }
 
@@ -200,7 +212,7 @@ int write_page_file(u_int64_t rank_file) {
 
     if (write(fd, &header, sizeof(PageFileHeader)) != sizeof(PageFileHeader)) {
         close(fd);
-        pthread_mutex_unlock(&PAGE_FILE_MUTEX);
+        pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
         return -1;
     }
 
@@ -208,7 +220,7 @@ int write_page_file(u_int64_t rank_file) {
     for (auto &pd : PAGE_FILES[rank_file].page_data_entries) {
         if (write(fd, pd.data(), pd.size()) != pd.size()) {
             close(fd);
-            pthread_mutex_unlock(&PAGE_FILE_MUTEX);
+            pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
             return -1;
         }
     }
@@ -364,4 +376,11 @@ std::vector<std::vector<std::string>> get_page_file_names(const std::string& dir
     }
 
     return std::move(v);
+}
+
+u_int64_t get_num_crawled_pages() {
+    pthread_mutex_lock(&NUM_CRAWLED_MUTEX);
+    u_int64_t return_value = NUM_CRAWLED_PAGES;
+    pthread_mutex_unlock(&NUM_CRAWLED_MUTEX);
+    return return_value;
 }

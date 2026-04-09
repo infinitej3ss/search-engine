@@ -50,13 +50,13 @@ void run_worker_thread() {
             // NOTE: do we pass anchor text to the other machines too?
             
             URL_destination URL_dest = get_URL_destination(link.URL);
+            FrontierUrl frontier_url = {new_dist_from_seedlist, link.URL, link.anchorText};
 
             if (URL_dest == frontier){ // if URL is for frontier
-                FrontierUrl frontier_url = {new_dist_from_seedlist, link.URL};
                 insert_url(frontier_url);
             } else {                   // if URL is for a remote host
                 int destHost = URL_to_destination(link.URL);
-                send_URL_to_remote_host(link.URL, new_dist_from_seedlist, destHost);
+                send_URL_to_remote_host(link.URL, new_dist_from_seedlist, destHost); // NOTE: should take in a FrontierUrl struct
             }
         }
 

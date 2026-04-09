@@ -9,7 +9,7 @@
 struct PageData {
     u_int64_t distance_from_seedlist;
     std::string url;
-    std::vector<std::string> words, titlewords;
+    std::vector<std::string> words, titlewords, anchor_text;
 };
 
 // a serialized page consists of a header followed by
@@ -97,3 +97,5 @@ int initialize_page_file_dir(const std::string& dir);
 // Returns:
 //      a 2D vector where the first index corresponds to rank and the second stores the file names
 std::vector<std::vector<std::string>> get_page_file_names(const std::string& dir);
+
+u_int64_t get_num_crawled_pages();
