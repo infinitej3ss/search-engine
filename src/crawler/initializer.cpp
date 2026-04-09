@@ -5,7 +5,7 @@
 #include <iostream>
 
 
-// usage: ./crawler <config file> <seedlist>
+// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir>
 int main(int argc, char** argv){
     
     // add config file endpoints to vector
@@ -14,6 +14,12 @@ int main(int argc, char** argv){
     // initialize frontier
     if (ingest_seedlist(argv[2]) != 0) return 1;
 
+    // initialize directories
+    initialize_page_file_dir(std::string(argv[3]));
+    initialize_frontier_file_dir(std::string(argv[4]));
+    initialize_bloom_filter_dir(std::string(argv[5]));
+    load_frontier_filters();
+    
     // initialize connections to peers
     establish_peer_connections();
 

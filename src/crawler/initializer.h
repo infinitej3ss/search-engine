@@ -1,6 +1,8 @@
 #pragma once
 
 #include "frontier.h"
+#include "page_data.h"
+#include "BloomFilter.h"
 
 #include <string>
 #include <vector>
