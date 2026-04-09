@@ -56,7 +56,7 @@ void run_worker_thread() {
                 insert_url(frontier_url);
             } else {                   // if URL is for a remote host
                 int destHost = URL_to_destination(link.URL);
-                send_URL_to_remote_host(link.URL, new_dist_from_seedlist, destHost); // NOTE: should take in a FrontierUrl struct
+                send_URL_to_remote_peer(frontier_url, destHost);
             }
         }
 
