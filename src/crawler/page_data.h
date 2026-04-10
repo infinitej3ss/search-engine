@@ -53,7 +53,7 @@ void close_page_file();
 //      pd - page_data struct to be written into
 //
 // Returns:
-//      0 on success, -1 on failure
+//      index of this page in the page file on success, -1 on failure
 int get_next_page(PageData& pd);
 
 // write page data to specified rank file
@@ -99,3 +99,26 @@ int initialize_page_file_dir(const std::string& dir);
 std::vector<std::vector<std::string>> get_page_file_names(const std::string& dir);
 
 u_int64_t get_num_crawled_pages();
+
+// find rank of a given page file name
+//
+// returns __INT64_MAX__ if the page is invalid
+u_int64_t get_page_file_rank(const std::string& file_name);
+
+// find num of a given page file name
+//
+// returns __INT64_MAX__ if the page is invalid
+u_int64_t get_page_file_num(const std::string& file_name);
+
+// loads page data for a specific page using an index
+//
+// Parameters:
+//      pd - PageData struct to overwrite
+//      dir - directory with the file
+//      rank - rank of the file
+//      num - num of the file
+//      index - index of the page data in the file
+//
+// Returns:
+//      0 on success, -1 on failure
+int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64_t rank, const u_int64_t num, const u_int64_t index);
