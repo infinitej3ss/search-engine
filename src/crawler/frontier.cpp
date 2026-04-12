@@ -12,6 +12,7 @@
 
 #include "BloomFilter.h"
 #include "page_data.h"
+#include "get_ssl.h"
 
 // stores a queue of frontier urls
 struct FrontierQueue {
@@ -81,6 +82,9 @@ bool is_in_blacklist(std::string &url) {
 
 // inserts url into the frontier
 int insert_url(FrontierUrl& url) {
+
+    url.url = upgrade_to_https(url.url);
+
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     // check url against already seen and blacklisted domains bloom filters
     if(SEEN.contains(url.url)) {
