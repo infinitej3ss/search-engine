@@ -1,9 +1,12 @@
 #pragma once
 
 #include "initializer.h"
+#include "robots.txt/RobotsCache.h"
 #include <fstream>
 #include <iostream>
 
+// TODO: Declare RobotsCache object
+RobotsCache robotsCache;
 
 // usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir>
 int main(int argc, char** argv){
@@ -20,7 +23,7 @@ int main(int argc, char** argv){
     initialize_bloom_filter_dir(std::string(argv[5]));
     load_frontier_filters();
     
-    // initialize connections to peers
+    // connect to peers
     establish_peer_connections();
 
     // manage worker threads

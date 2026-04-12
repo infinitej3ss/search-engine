@@ -8,7 +8,7 @@
 
 // maps a URL to a machine ID
 int URL_to_destination(const std::string& url) {
-    int numHosts = endpoints.size();
+    int numHosts = peers.size();
     if (numHosts == 0) return -1;
 
     // Use C++ built-in string hashing
