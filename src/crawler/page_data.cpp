@@ -20,6 +20,7 @@ bool VALID_PAGE_FILE = false;
 u_int64_t NUM_PAGE_FILE_ENTRIES = 0;
 u_int64_t PAGE_FILE_SIZE_BYTES = 0;
 pthread_mutex_t PAGE_FILE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t PAGE_FILE_INDEXING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
 u_int64_t NUM_CRAWLED_PAGES = 0;
 pthread_mutex_t NUM_CRAWLED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
@@ -92,6 +93,7 @@ void close_page_file() {
 // loads the next page's data
 int get_next_page(PageData& pd) {
     pthread_mutex_lock(&PAGE_FILE_MUTEX);
+    int index_of_page = (char*)CURRENT_PAGE_FILE_LOCATION - (char*)MAPPED_PAGE_FILE;
 
     // check that current page file is valid
     if(!VALID_PAGE_FILE) {
@@ -122,7 +124,7 @@ int get_next_page(PageData& pd) {
     NUM_PAGE_FILE_ENTRIES--;
     
     pthread_mutex_unlock(&PAGE_FILE_MUTEX);
-    return 0;
+    return index_of_page;
 }
 
 // write page data to specified rank file
@@ -317,6 +319,32 @@ u_int64_t get_page_file_rank(std::string& file_name) {
     return atoi(rank.c_str());
 }
 
+// find num of a given page file name
+//
+// returns __INT64_MAX__ if the page is invalid
+u_int64_t get_page_file_num(std::string& file_name) {
+    if (file_name.length() < std::string("crawled_page_data_rank_x").length()) {
+        return __INT64_MAX__;
+    }
+
+    u_int64_t index = std::string("crawled_page_data_rank_").length();  // location the number should start at
+
+    // search until finding the end of the rank number
+    while (index < file_name.length() && file_name[index] != '_') {
+        index++;
+    }
+
+    if (index == file_name.length() || file_name[index] != '_') {
+        return __INT64_MAX__;
+    }
+
+    index += 5; // skip "_num_"
+
+    std::string num(file_name.begin() + index, file_name.end());
+
+    return atoi(num.c_str());
+}
+
 // initializes the page file directory specified for writing
 int initialize_page_file_dir(const std::string& dir) {
     DIR* dir_ptr;
@@ -383,4 +411,32 @@ u_int64_t get_num_crawled_pages() {
     u_int64_t return_value = NUM_CRAWLED_PAGES;
     pthread_mutex_unlock(&NUM_CRAWLED_MUTEX);
     return return_value;
+}
+
+// loads page data for a specific page using an index
+int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64_t rank, const u_int64_t num, const u_int64_t index){
+    std::string file_name = dir + "crawled_page_data_rank_" + std::to_string(rank) + "_num_" + std::to_string(num);
+    pthread_mutex_lock(&PAGE_FILE_INDEXING_MUTEX);
+
+    // load file
+    if(load_page_file(file_name) == -1) {
+        pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
+        return -1;
+    }
+
+    // index to file
+    CURRENT_PAGE_FILE_LOCATION += index;
+
+    // load data
+    PageData pd;
+    if (get_next_page(pd) == -1) {
+        pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
+        return -1;
+    }
+
+    // close
+    close_page_file();
+
+    pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
+    return 0;
 }
