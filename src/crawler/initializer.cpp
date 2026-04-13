@@ -64,7 +64,7 @@ int8_t ingest_seedlist(const char* seedlist){
         }
         
         FrontierUrl newUrl = {0, currentLine};
-        insert_url(newUrl);
+        insert_seed_list(newUrl);
     }
 
     return 0;
