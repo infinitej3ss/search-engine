@@ -14,4 +14,10 @@ pthread_mutex_t STOP_CRAWLING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
 bool should_continue_running();
 
-void run_worker_thread();
+void stop_crawling() {
+    pthread_mutex_lock(&STOP_CRAWLING_MUTEX);
+    STOP_CRAWLING = true;
+    pthread_mutex_unlock(&STOP_CRAWLING_MUTEX);
+}
+
+void *run_worker_thread(void *in);

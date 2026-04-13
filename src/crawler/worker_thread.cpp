@@ -5,10 +5,10 @@ bool should_continue_running() {
     pthread_mutex_lock(&STOP_CRAWLING_MUTEX);
     should_stop = STOP_CRAWLING;
     pthread_mutex_unlock(&STOP_CRAWLING_MUTEX);
-    return should_stop;
+    return !should_stop;
 }
 
-void run_worker_thread() {
+void* run_worker_thread(void* in) {
     while (should_continue_running()) {
         // get url from frontier
         FrontierUrl frontier_url = get_url();
@@ -21,9 +21,7 @@ void run_worker_thread() {
             continue;
         }
         if (ssl_status == blacklist) {
-            // disable killing 
             blacklist_url(frontier_url.url);
-            // enable killing
             continue;
         }
 
@@ -40,12 +38,9 @@ void run_worker_thread() {
         u_int64_t rank = 0; // TODO: decide rank group this page belongs to
 
         // distribute links
-        // disable killing
 
         u_int32_t new_dist_from_seedlist = frontier_url.distance_from_seedlist + 1;
         for(auto &link : parsed_html.links) {
-            // NOTE: do we pass anchor text to the other machines too?
-            
             URL_destination URL_dest = get_URL_destination(link.URL);
             FrontierUrl frontier_url = {new_dist_from_seedlist, link.URL, link.anchorText};
 
@@ -65,8 +60,5 @@ void run_worker_thread() {
                 write_frontier_filters();
             }
         }
-        // NOTE: probably store anchor text in hash tables, saving to disk when too large -> pass over tables after crawling and save as page files
-
-        // enable killing
     }
 }

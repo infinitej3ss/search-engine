@@ -1,12 +1,13 @@
 #include "initializer.h"
 #include "robots.txt/RobotsCache.h"
+#include "worker_thread.h"
 #include <fstream>
 #include <iostream>
 
 // TODO: Declare RobotsCache object
 RobotsCache robotsCache;
 
-// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir>
+// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count>
 int main(int argc, char** argv){
     
     // add config file endpoints to vector
@@ -26,8 +27,54 @@ int main(int argc, char** argv){
     establish_peer_connections();
 
     // manage worker threads
+    int thread_count = atoi(argv[6]);
+    vector<pthread_t> threads(thread_count);
+    for (int i = 0; i < thread_count; i++) {
+        if (pthread_create(&threads[i], nullptr, run_worker_thread, nullptr) != 0) {
+            cerr << "Error creating thread " << i << endl;
+            return 1;
+        }
+    }
+
+    for(auto &t : threads) {
+        pthread_detach(t);
+    }
 
     // manage connections with peers
+
+    // await user input
+    bool continue_running = true;
+    while (continue_running) {
+        char input;
+        cin >> input;
+        switch(input) {
+            case 'n': 
+            u_int64_t num = get_num_crawled_pages();
+            cout << "crawled " << std::to_string(num) << " pages\n";
+            break;
+
+            case 's':
+            stop_crawling();
+            u_int64_t num = get_num_crawled_pages();
+            cout << "stopped crawling\n crawled " << std::to_string(num) << " pages\n";
+            break;
+
+            case 'e':
+            stop_crawling();
+            continue_running = false;
+            break;
+
+            case 'h':
+            cout << "available commands:\n h - print a help message\n n - print number pages crawled\n s - stop crawling\n e - exit program\n";
+            break;
+
+            default:
+            cout << "unrecognized command, enter h for available commands\n";
+            break;
+        }
+    }
+
+    // close connections
 }
 
 int initialize_peers(const std::string &config_file){
