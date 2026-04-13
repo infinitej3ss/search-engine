@@ -22,18 +22,24 @@ find_package(OpenSSL COMPONENTS SSL)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
-add_executable(tests ${TEST_SOURCES})
+file(GLOB PROJECT_SOURCES CONFIGURE_DEPENDS src/*.cpp src/crawler/*.cpp)
+list(REMOVE_ITEM PROJECT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
+
+list(REMOVE_ITEM PROJECT_SOURCES 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/initializer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/page_file_test.cpp
+)
+
+add_executable(tests ${TEST_SOURCES} ${PROJECT_SOURCES})
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
 target_link_libraries(tests PRIVATE OpenSSL::SSL)
-target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-
+target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler)
 enable_testing()
 
 include(CTest)
 include(Catch)
 catch_discover_tests(tests)
 
-# main executable
-add_executable(engine src/main.cpp)
-target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src)
-
+add_executable(engine src/main.cpp ${PROJECT_SOURCES})
+target_link_libraries(engine PRIVATE OpenSSL::SSL)
+target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler)

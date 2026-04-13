@@ -1,5 +1,7 @@
+#include "frontier.h"
 #include "get_ssl.h"
 #include "robots.txt/RobotsTxt.h"
+#include "robots.txt/RobotsCache.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -16,7 +18,15 @@ std::string USER_AGENT = "Jess Morton/1.0 (mortonjs@umich.edu)";
 std::unordered_map<std::string, RobotsCacheEntry> robotsCache;
 
 // take a URL and return the HTML
-get_ssl_return get_ssl(std::string &input_url, std::string &page){
+get_ssl_return get_ssl(std::string& input_url, std::string& page){
+
+    // Check blacklist
+    if (is_in_blacklist(input_url)) return blacklist;
+    
+    // Check robots.txt cache
+    //if (allowed_to_crawl(input_url)) return 
+
+    // Proceed with fetching HTML
 
     ParsedUrl url(input_url.c_str());
 
@@ -172,36 +182,36 @@ get_ssl_return get_ssl(std::string &input_url, std::string &page){
     return success;
 }
 
-// Used to get the root domain (origin) for a given URL (useful for robots.txt cache)
-// std::string extract_domain(const std::string& url){
-//     size_t start_pos = 0;
+// Used to get the root domain (authority) for a given URL (useful for link distribution)
+std::string extract_authority(const std::string& url){
+    size_t start_pos = 0;
 
-//     // skip the scheme
-//     size_t scheme_pos = url.find("://");
-//     if (scheme_pos != std::string::npos) {
-//         start_pos = scheme_pos + 3;
-//     }
+    // skip the scheme
+    size_t scheme_pos = url.find("://");
+    if (scheme_pos != std::string::npos) {
+        start_pos = scheme_pos + 3;
+    }
 
-//     // find the end of the host/domain block 
-//     size_t end_pos = url.find_first_of("/?#", start_pos);
+    // find the end of the host/domain block 
+    size_t end_pos = url.find_first_of("/?#", start_pos);
     
-//     // extract everything between the scheme and the path
-//     std::string origin = url.substr(start_pos, end_pos - start_pos);
+    // extract everything between the scheme and the path
+    std::string authority = url.substr(start_pos, end_pos - start_pos);
 
-//     // remove user authentication if present
-//     size_t auth_pos = origin.find('@');
-//     if (auth_pos != std::string::npos) {
-//         origin = origin.substr(auth_pos + 1);
-//     }
+    // remove user authentication if present
+    size_t auth_pos = authority.find('@');
+    if (auth_pos != std::string::npos) {
+        authority = authority.substr(auth_pos + 1);
+    }
 
-//     // remove the port number if present
-//     size_t port_pos = origin.find(':');
-//     if (port_pos != std::string::npos) {
-//         origin = origin.substr(0, port_pos);
-//     }
+    // remove the port number if present
+    size_t port_pos = authority.find(':');
+    if (port_pos != std::string::npos) {
+        authority = authority.substr(0, port_pos);
+    }
 
-//     return origin;
-// }
+    return authority;
+}
 
 std::string upgrade_to_https(const std::string &url) {
     if (url.find("https://") == 0) {

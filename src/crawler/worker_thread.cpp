@@ -1,8 +1,5 @@
 #include "worker_thread.h"
 
-bool STOP_CRAWLING = false;
-pthread_mutex_t STOP_CRAWLING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-
 bool should_continue_running() {
     bool should_stop;
     pthread_mutex_lock(&STOP_CRAWLING_MUTEX);

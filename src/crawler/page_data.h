@@ -12,12 +12,6 @@ struct PageData {
     std::vector<std::string> words, titlewords, anchor_text;
 };
 
-// a serialized page consists of a header followed by
-// data containing the url, words, and titlewords
-struct __attribute__((packed)) SerializedPageDataHeader {
-    u_int64_t distance_from_seedlist;
-};
-
 // a page file consists of a page_file_header followed by num_pages page_data entries
 struct __attribute__((packed)) PageFileHeader {
     u_int64_t magic_number;
@@ -32,6 +26,32 @@ struct PageFile {
     u_int64_t num_pages = 0;
     std::vector<std::vector<u_int8_t>> page_data_entries; // stored as serialized data in the vectors' data
 };
+
+const u_int64_t NUM_PAGE_FILE_RANKS = 5;                    // number of page files to be written to based on url's ranking
+const u_int64_t MAX_PAGE_FILE_SIZE_BYTES = 200000000;       // 200MB
+const u_int64_t CORRECT_MAGIC_NUMBER = 863404304674789781;  // magic number for page file
+
+inline void* MAPPED_PAGE_FILE;
+inline u_int64_t MAPPED_PAGE_FILE_SIZE = 0;
+inline void* CURRENT_PAGE_FILE_LOCATION;
+inline bool VALID_PAGE_FILE = false;
+inline u_int64_t NUM_PAGE_FILE_ENTRIES = 0;
+inline u_int64_t PAGE_FILE_SIZE_BYTES = 0;
+inline pthread_mutex_t PAGE_FILE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+inline pthread_mutex_t PAGE_FILE_INDEXING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
+inline u_int64_t NUM_CRAWLED_PAGES = 0;
+inline pthread_mutex_t NUM_CRAWLED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
+inline PageFile PAGE_FILES[NUM_PAGE_FILE_RANKS];
+inline std::string DIR_PATH = "./";  // TODO: function to initialize this path and page file's number written
+
+// a serialized page consists of a header followed by
+// data containing the url, words, and titlewords
+struct __attribute__((packed)) SerializedPageDataHeader {
+    u_int64_t distance_from_seedlist;
+};
+
 
 // load given page file into memory for later use with get_next_page
 // automatically closes previous page file if loaded

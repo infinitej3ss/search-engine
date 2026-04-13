@@ -1,5 +1,3 @@
-#pragma once
-
 #include "initializer.h"
 #include "robots.txt/RobotsCache.h"
 #include <fstream>
@@ -12,7 +10,8 @@ RobotsCache robotsCache;
 int main(int argc, char** argv){
     
     // add config file endpoints to vector
-    if (initialize_peers(argv[1]) != 0) return 1;
+    std::string configFile = argv[1];
+    if (initialize_peers(configFile) != 0) return 1;
 
     // initialize frontier
     if (ingest_seedlist(argv[2]) != 0) return 1;
@@ -31,7 +30,7 @@ int main(int argc, char** argv){
     // manage connections with peers
 }
 
-int initialize_peers(const char* config_file){
+int initialize_peers(const std::string &config_file){
     std::ifstream file(config_file);
 
     // file opening error checking

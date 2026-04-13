@@ -7,13 +7,13 @@
 #include <functional> // Required for std::hash
 
 // maps a URL to a machine ID
-int URL_to_destination(const std::string& url) {
+int URL_to_destination(const std::string &url) {
     int numHosts = peers.size();
     if (numHosts == 0) return -1;
 
     // Use C++ built-in string hashing
     std::hash<std::string> hasher;
-    size_t hash_val = hasher(extract_domain(url));
+    size_t hash_val = hasher(extract_authority(url));
 
     return hash_val % numHosts;
 }

@@ -9,25 +9,6 @@
 #include <cstring>
 #include <utility>
 
-const u_int64_t NUM_PAGE_FILE_RANKS = 5;                    // number of page files to be written to based on url's ranking
-const u_int64_t MAX_PAGE_FILE_SIZE_BYTES = 200000000;       // 200MB
-const u_int64_t CORRECT_MAGIC_NUMBER = 863404304674789781;  // magic number for page file
-
-void* MAPPED_PAGE_FILE;
-u_int64_t MAPPED_PAGE_FILE_SIZE = 0;
-void* CURRENT_PAGE_FILE_LOCATION;
-bool VALID_PAGE_FILE = false;
-u_int64_t NUM_PAGE_FILE_ENTRIES = 0;
-u_int64_t PAGE_FILE_SIZE_BYTES = 0;
-pthread_mutex_t PAGE_FILE_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t PAGE_FILE_INDEXING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-
-u_int64_t NUM_CRAWLED_PAGES = 0;
-pthread_mutex_t NUM_CRAWLED_MUTEX = PTHREAD_MUTEX_INITIALIZER;
-
-PageFile PAGE_FILES[NUM_PAGE_FILE_RANKS];
-std::string DIR_PATH = "./";  // TODO: function to initialize this path and page file's number written
-
 // load given page file into memory for later use with get_next_page
 int load_page_file(const std::string& file_name) {
     pthread_mutex_lock(&PAGE_FILE_MUTEX);
@@ -428,7 +409,7 @@ int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64
     CURRENT_PAGE_FILE_LOCATION += index;
 
     // load data
-    PageData pd;
+    //PageData pd;
     if (get_next_page(pd) == -1) {
         pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
         return -1;

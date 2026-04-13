@@ -8,8 +8,6 @@
 #include <vector>
 #include <netinet/in.h>
 
-std::vector<Peer> peers;
-
 enum ConnectionState {
     DISCONNECTED,
     CONNECTING,
@@ -26,8 +24,13 @@ struct Peer {
     std::vector<FrontierUrl> url_send_buffer; // Data waiting to be sent
 };
 
+std::vector<Peer> peers;
+
 // add endpoints from config file to endpoints vector
-void initialize_peers(std::string& config_file);
+int initialize_peers(std::string& config_file);
 
 // block until all peers have confirmed their connection
 void establish_peer_connections();
+
+// read seedlist into frontier
+int8_t ingest_seedlist(const char* seedlist);

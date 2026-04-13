@@ -1,8 +1,10 @@
 // Object that manages robots.txt data for the crawler
 // Provides a helpful interface for request status + crawl delay
+#pragma once
+
 
 #include "RobotsTxt.h"
-#include "get_ssl.h"
+#include "../get_ssl.h"
 #include <vector>
 #include <unordered_map>
 #include <memory>
@@ -17,10 +19,31 @@ enum fetch_status {
     NON_EXISTENT
 };
 
+enum crawl_status {
+    can_crawl,
+    waiting_to_crawl,
+    do_not_crawl
+};
+
 struct RobotsCacheEntry {
     shared_ptr<RobotsTxt> robotsFile;
     fetch_status status;
 };
+
+inline string url_to_origin(const string &url) {
+    // Find the end of the origin (the first slash after the scheme)
+    // We start searching from index 8 to safely skip "https://" or "http://"
+    size_t scheme_end = url.find("://");
+    size_t start_search = (scheme_end != string::npos) ? scheme_end + 3 : 0;
+    
+    size_t path_start = url.find_first_of("/?#", start_search);
+
+    if (path_start == string::npos) {
+        return url; // No path, the whole URL is the origin
+    } else {
+        return url.substr(0, path_start); // Keep the scheme AND the origin
+    }
+}
 
 class RobotsCache {
     
@@ -44,7 +67,9 @@ class RobotsCache {
     }
 
     // Returns true if the request was successful
-    bool request_robots_file(const string &origin) {
+    bool request_robots_file(const string &url) {
+
+        string origin = url_to_origin(url); // convert URL to origin (scheme + domain + port)
 
         // set status to FETCHING
         {
@@ -94,19 +119,9 @@ class RobotsCache {
         
         return RobotsCacheEntry{nullptr, NOT_FETCHED}; 
     }
-};
 
-string domain_to_origin(const string &url) {
-    // Find the end of the origin (the first slash after the scheme)
-    // We start searching from index 8 to safely skip "https://" or "http://"
-    size_t scheme_end = url.find("://");
-    size_t start_search = (scheme_end != string::npos) ? scheme_end + 3 : 0;
-    
-    size_t path_start = url.find_first_of("/?#", start_search);
-
-    if (path_start == string::npos) {
-        return url; // No path, the whole URL is the origin
-    } else {
-        return url.substr(0, path_start); // Keep the scheme AND the origin
+    // abstraction for checking crawlability of a URL
+    crawl_status allowed_to_crawl(const string &url){
+        return can_crawl;
     }
-}
+};

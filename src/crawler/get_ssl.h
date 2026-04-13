@@ -8,6 +8,7 @@
 enum get_ssl_return {
     failure,
     blacklist,
+    waiting_for_crawl_delay,
     success
 };
 
@@ -15,12 +16,6 @@ enum robots_cache_status {
     exists,
     does_not_exist,
     not_yet_fetched
-};
-
-struct RobotsCacheEntry {
-    std::unique_ptr<RobotsTxt> robotsObject;
-    // when to fetch the next page from this domain? (useful for crawl delay)
-    std::chrono::steady_clock::time_point nextAllowedPageFetch; 
 };
 
 class ParsedUrl {
@@ -95,10 +90,10 @@ class ParsedUrl {
 };
 
 // take a URL and return the HTML
-get_ssl_return get_ssl(std::string& url, const std::string& page);
+get_ssl_return get_ssl(std::string& input_url, std::string& page);
 
-// used to get the root domain for a given URL (useful for robots.txt cache)
-//std::string extract_domain(const std::string& url);
+// used to get the root domain for a given URL (useful for hashed link distribution)
+std::string extract_authority(const std::string& url);
 
 // returns whether a given domain's robots.txt has been fetched, has not, or doesn't exist
 robots_cache_status get_robots_cache_status(const std::string& domain);

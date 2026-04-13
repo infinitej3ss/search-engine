@@ -13,11 +13,11 @@ TEST_CASE("robots.txt cache", "[getSSL]"){
     rc.request_robots_file(robotsURL);
 }
 
-TEST_CASE("domain_to_origin", "[getSSL]"){
+TEST_CASE("url_to_origin", "[getSSL]"){
     std::string s1 = "https://google.com";
     std::string s2 = "http://google.com";
     std::string s3 = "https://google.com/a/b/c";
 
-    REQUIRE((domain_to_origin(s1) != domain_to_origin(s2)));
-    REQUIRE((domain_to_origin(s1) == domain_to_origin(s3)));
+    REQUIRE((url_to_origin(s1) != url_to_origin(s2)));
+    REQUIRE((url_to_origin(s1) == url_to_origin(s3)));
 }

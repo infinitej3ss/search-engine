@@ -2,7 +2,6 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "crawler/page_data.h"
-#include "crawler/page_data.cpp"
 
 using Catch::Matchers::WithinAbs;
 

@@ -15,9 +15,9 @@
 #include <string>
 #include <vector>
 
-std::string BLOOM_DIR_PATH = "./";
+inline std::string BLOOM_DIR_PATH = "./";
 
-void initialize_bloom_filter_dir(const std::string &dir) {
+inline void initialize_bloom_filter_dir(const std::string &dir) {
     BLOOM_DIR_PATH = dir;
 }
 
