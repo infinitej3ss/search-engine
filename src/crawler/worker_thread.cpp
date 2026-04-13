@@ -42,7 +42,7 @@ void run_worker_thread() {
         // distribute links
         // disable killing
 
-        int new_dist_from_seedlist = frontier_url.distance_from_seedlist + 1;
+        u_int32_t new_dist_from_seedlist = frontier_url.distance_from_seedlist + 1;
         for(auto &link : parsed_html.links) {
             // NOTE: do we pass anchor text to the other machines too?
             

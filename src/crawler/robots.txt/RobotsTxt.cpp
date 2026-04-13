@@ -27,7 +27,7 @@ using namespace std;
 // Utilities
 //
 
-class ParsedUrl
+class ParsedUrlUtf8
    {
    private:
        Utf8 *pathBuffer;
@@ -39,7 +39,7 @@ class ParsedUrl
                   *Port,
                   *Path;
 
-      ParsedUrl( const Utf8 *url )
+      ParsedUrlUtf8( const Utf8 *url )
          {
          // Assumes url points to static text but
          // does not check.
@@ -97,7 +97,7 @@ class ParsedUrl
             Host = Path = p;
          }
 
-      ~ParsedUrl( )
+      ~ParsedUrlUtf8( )
          {
          delete [ ] pathBuffer;
          }
@@ -973,8 +973,8 @@ bool RobotsTxt::UrlAllowed( const Utf8 *user, const Utf8 *url,
 
    // Wrapper for PathAllowed that parses the URL first.
 
-   ParsedUrl parsedurl( url );
-   return PathAllowed( user, parsedurl.Path, crawlDelay );
+   ParsedUrlUtf8 ParsedUrlUtf8( url );
+   return PathAllowed( user, ParsedUrlUtf8.Path, crawlDelay );
    }
 
 

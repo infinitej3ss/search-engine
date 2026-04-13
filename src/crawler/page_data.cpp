@@ -50,7 +50,7 @@ int load_page_file(const std::string& file_name) {
 
     // create memory mapping
     MAPPED_PAGE_FILE = mmap(NULL, MAPPED_PAGE_FILE_SIZE, PROT_READ, MAP_SHARED, fd, 0);
-    CURRENT_PAGE_FILE_LOCATION = MAPPED_PAGE_FILE + sizeof(PageFileHeader);
+    CURRENT_PAGE_FILE_LOCATION = (u_int8_t*)MAPPED_PAGE_FILE + sizeof(PageFileHeader);
     close(fd);
     if(MAPPED_PAGE_FILE == MAP_FAILED) {
         pthread_mutex_unlock(&PAGE_FILE_MUTEX);
@@ -93,7 +93,7 @@ int get_next_page(PageData& pd) {
     
     // read header
     memcpy(&page_data_header, CURRENT_PAGE_FILE_LOCATION, sizeof(SerializedPageDataHeader));
-    CURRENT_PAGE_FILE_LOCATION += sizeof(SerializedPageDataHeader);
+    CURRENT_PAGE_FILE_LOCATION = (u_int8_t*)CURRENT_PAGE_FILE_LOCATION + sizeof(SerializedPageDataHeader);
     pd.distance_from_seedlist = page_data_header.distance_from_seedlist;
 
     // read url and word vectors
@@ -136,7 +136,7 @@ int write_page(u_int64_t rank_file, PageData& pd) {
 
     // write header
     memcpy(current_location, &pd.distance_from_seedlist, sizeof(u_int64_t));
-    current_location += sizeof(u_int64_t);
+    current_location = (u_int8_t*)current_location + sizeof(u_int64_t);
 
     // write data
     serialize_string(&current_location, pd.url);
@@ -220,11 +220,11 @@ void serialize_string(void** buffer, const std::string& s){
 
     // write size of string
     memcpy(*buffer, &size, sizeof(u_int16_t));
-    *buffer += sizeof(u_int16_t);
+    *buffer = (u_int8_t*)*buffer + sizeof(u_int16_t);
 
     // write contents of string
     memcpy(*buffer, s.data(), size);
-    *buffer += size;
+    *buffer = (u_int8_t*)*buffer + size;
 }
 
 // reads serialized string from buffer and increments buffer past the end of the string
@@ -234,12 +234,12 @@ std::string deserialize_string(void** buffer) {
 
     // resize string to serialized value
     memcpy(&size, *buffer, sizeof(u_int16_t));
-    *buffer += sizeof(u_int16_t);
+    *buffer = (u_int8_t*)*buffer + sizeof(u_int16_t);
     s.resize(size);
 
     // read contents of string
     memcpy(s.data(), *buffer, size);
-    *buffer += size;
+    *buffer = (u_int8_t*)*buffer + size;
 
     return std::move(s);
 }
@@ -250,7 +250,7 @@ void serialize_string_vector(void** buffer, const std::vector<std::string>& v) {
 
     // write size of vector
     memcpy(*buffer, &size, sizeof(u_int64_t));
-    *buffer += sizeof(u_int64_t);
+    *buffer = (u_int8_t*)*buffer + sizeof(u_int64_t);
 
     // write strings
     for (auto& s : v) {
@@ -265,7 +265,7 @@ std::vector<std::string> deserialize_string_vector(void** buffer) {
 
     // resize vector to serialized value
     memcpy(&size, *buffer, sizeof(u_int64_t));
-    *buffer += sizeof(u_int64_t);
+    *buffer = (u_int8_t*)*buffer + sizeof(u_int64_t);
     v.resize(size);
 
     // read strings
@@ -406,7 +406,7 @@ int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64
     }
 
     // index to file
-    CURRENT_PAGE_FILE_LOCATION += index;
+    CURRENT_PAGE_FILE_LOCATION = (u_int8_t*)CURRENT_PAGE_FILE_LOCATION + index;
 
     // load data
     //PageData pd;

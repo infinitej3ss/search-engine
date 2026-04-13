@@ -3,3 +3,5 @@ eval/.venv/
 build/
 .cache
 .DS_Store
+
+.vscode/

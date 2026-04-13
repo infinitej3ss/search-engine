@@ -246,12 +246,12 @@ void serialize_frontier_url_vector(void** buffer, const std::vector<FrontierUrl>
 
     // write size of vector
     memcpy(*buffer, &size, sizeof(u_int64_t));
-    *buffer += sizeof(u_int64_t);
+    *buffer = (u_int8_t*)*buffer + sizeof(u_int64_t);
 
     // write frontier urls
     for (auto& s : v) {
         memcpy(*buffer, &s.distance_from_seedlist, sizeof(u_int32_t));
-        *buffer += sizeof(u_int32_t);
+        *buffer = (u_int8_t*)*buffer + sizeof(u_int32_t);
         serialize_string(buffer, s.url);
         serialize_string_vector(buffer, s.anchor_text);
     }
@@ -264,13 +264,13 @@ std::vector<FrontierUrl> deserialize_frontier_url_vector(void** buffer) {
 
     // resize vector to serialized value
     memcpy(&size, *buffer, sizeof(u_int64_t));
-    *buffer += sizeof(u_int64_t);
+    *buffer = (u_int8_t*)*buffer + sizeof(u_int64_t);
     v.resize(size);
 
     // read strings
     for (u_int64_t i = 0; i < size; i++) {
         memcpy(&v.at(i).distance_from_seedlist, *buffer, sizeof(u_int32_t));
-        *buffer += sizeof(u_int32_t);
+        *buffer = (u_int8_t*)*buffer + sizeof(u_int32_t);
         v.at(i).url = deserialize_string(buffer);
         v.at(i).anchor_text = deserialize_string_vector(buffer);
     }
