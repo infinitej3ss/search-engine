@@ -10,7 +10,7 @@ inline std::string USER_AGENT = "Jess Morton/1.0 (mortonjs@umich.edu)";
 enum get_ssl_return {
     failure,
     blacklist,
-    waiting_for_crawl_delay,
+    redirect,
     success
 };
 
@@ -95,7 +95,7 @@ class ParsedUrlSsl {
 get_ssl_return crawl_page(const std::string& input_url, std::string& page);
 
 // take a URL and return the HTML
-get_ssl_return get_ssl(const std::string& input_url, std::string& page);
+get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::string& redirect);
 
 // used to get the root domain for a given URL (useful for hashed link distribution)
 std::string extract_authority(const std::string& url);

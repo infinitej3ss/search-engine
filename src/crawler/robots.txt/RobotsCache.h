@@ -21,7 +21,7 @@ enum fetch_status {
 
 enum crawl_status {
     can_crawl,
-    waiting_to_crawl,
+    wait_to_crawl,
     do_not_crawl
 };
 
@@ -105,7 +105,8 @@ class RobotsCache {
         // getssl request for robots.txt
         string pageData;
         string robotsURL = origin + "/robots.txt";
-        get_ssl_return returnStatus = get_ssl(robotsURL, pageData);
+        string redirect;
+        get_ssl_return returnStatus = get_ssl(robotsURL, pageData, redirect);
 
         // update cache
         if (returnStatus != success) { 
@@ -131,7 +132,7 @@ class RobotsCache {
         if (it == cache.end() || it->second.status != FETCHED) {
             // If we don't have the file or it's still fetching, we shouldn't crawl yet.
             // (Or if NON_EXISTENT, you can bypass the check depending on your crawler policy).
-            return waiting_to_crawl; 
+            return wait_to_crawl; 
         }
 
         if (it->second.status == NON_EXISTENT) return can_crawl;
@@ -160,7 +161,7 @@ class RobotsCache {
             return can_crawl;
         } else {
             // We are allowed to crawl this URL, but the origin is on cooldown.
-            return waiting_to_crawl;
+            return wait_to_crawl;
         }
     }
 };
