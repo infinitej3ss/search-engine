@@ -95,7 +95,7 @@ class ParsedUrlSsl {
 get_ssl_return crawl_page(const std::string& input_url, std::string& page);
 
 // take a URL and return the HTML
-get_ssl_return get_ssl(std::string& input_url, std::string& page, std::string& redirectUrl);
+get_ssl_return get_ssl(const std::string& input_url, std::string& page);
 
 // used to get the root domain for a given URL (useful for hashed link distribution)
 std::string extract_authority(const std::string& url);

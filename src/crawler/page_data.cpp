@@ -427,5 +427,8 @@ u_int64_t rank_bucket_from_double(const double score) {
     if(score > 1) {
         return 0;
     }
+    if(score <= 0) {
+        return NUM_PAGE_FILE_RANKS - 1;
+    }
     return NUM_PAGE_FILE_RANKS - std::ceil(score * NUM_PAGE_FILE_RANKS);
 }

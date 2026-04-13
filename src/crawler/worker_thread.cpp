@@ -49,6 +49,9 @@ void* run_worker_thread(void* in) {
         rank_input.hop_distance = frontier_url.distance_from_seedlist;
         rank_input.url = frontier_url.url;
         StaticRanker url_rank(rank_input);
+        if(url_rank.rank() < 0) {
+            continue;
+        }
         u_int64_t rank = rank_bucket_from_double(url_rank.rank());
 
         // distribute links
