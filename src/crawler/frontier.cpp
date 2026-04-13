@@ -65,7 +65,7 @@ void load_frontier_filters() {
 }
 
 // tests url against blacklist by iterating though root paths
-bool is_in_blacklist(std::string &url) {
+bool is_in_blacklist(const std::string &url) {
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     size_t pos = 7; // skip initial https://
     if(url.length() < 8) {
@@ -86,9 +86,9 @@ bool is_in_blacklist(std::string &url) {
 }
 
 // inserts url into the frontier
-int insert_url(FrontierUrl& url) {
+int insert_url(const FrontierUrl& input_url) {
 
-    url.url = upgrade_to_https(url.url);
+    FrontierUrl url = FrontierUrl{0, upgrade_to_https(input_url.url), {}};
 
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     // check url against already seen and blacklisted domains bloom filters
@@ -169,7 +169,7 @@ int insert_url_vector(std::vector<FrontierUrl>& url_vector) {
 }
 
 // adds url to blacklist, preventing it from being inserted or retreived from the frontier
-void blacklist_url(std::string& url) {
+void blacklist_url(const std::string& url) {
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     size_t special_char = url.find_first_of("&%#+;@");
     BLACKLIST.insert(url.substr(0, special_char));

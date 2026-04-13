@@ -122,6 +122,7 @@ class RobotsCache {
 
     // abstraction for checking crawlability of a URL
     crawl_status allowed_to_crawl(const string &url){
+        // TODO: finish this
         return can_crawl;
     }
 };

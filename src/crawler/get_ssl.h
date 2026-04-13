@@ -89,6 +89,9 @@ class ParsedUrl {
         char *pathBuffer;
 };
 
+// get_ssl wrapper than handles redirects and robots.txt
+get_ssl_return crawl_page(const std::string& input_url, std::string& page);
+
 // take a URL and return the HTML
 get_ssl_return get_ssl(std::string& input_url, std::string& page);
 

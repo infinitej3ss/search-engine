@@ -21,6 +21,8 @@ int URL_to_destination(const std::string &url) {
 // gets whether a URL is for the frontier or a remote machine
 URL_destination get_URL_destination(std::string &url){
     // TODO: implement
+
+    return frontier;
 }
 
 // manages URLs that are sent to remote peers

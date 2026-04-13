@@ -13,7 +13,7 @@ struct FrontierUrl {
 //
 // Returns:
 //      0 on success, -1 on failure
-int insert_url(FrontierUrl& url);
+int insert_url(const FrontierUrl& input_url);
 
 // insert vector of urls
 //
@@ -22,10 +22,10 @@ int insert_url(FrontierUrl& url);
 int insert_url_vector(std::vector<FrontierUrl>& url_vector);
 
 // tests url against blacklist by iterating though root paths
-bool is_in_blacklist(std::string &url);
+bool is_in_blacklist(const std::string &url);
 
 // adds a url to blacklist, preventing it from being inserted or retreived from the frontier
-void blacklist_url(std::string &url);
+void blacklist_url(const std::string &url);
 
 // retreives url from the frontier
 FrontierUrl get_url();
