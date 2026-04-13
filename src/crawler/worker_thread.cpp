@@ -5,7 +5,7 @@
 #include "get_ssl.h"
 #include "link_distributor.h"
 #include "page_data.h"
-#include "ranker/static/static_ranker.hpp"
+#include "../ranker/static/static_ranker.hpp"
 
 bool STOP_CRAWLING = false;
 pthread_mutex_t STOP_CRAWLING_MUTEX = PTHREAD_MUTEX_INITIALIZER;

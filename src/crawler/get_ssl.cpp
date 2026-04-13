@@ -28,7 +28,7 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page){
 }
 
 // take a URL and return the HTML
-get_ssl_return get_ssl(std::string& input_url, std::string& page){
+get_ssl_return get_ssl(const std::string& input_url, std::string& page){
 
     ParsedUrlSsl url(input_url.c_str());
 
