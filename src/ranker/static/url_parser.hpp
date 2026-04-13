@@ -26,14 +26,14 @@ inline const std::unordered_set<char> SPECIAL_CHARS = {'?', '&', '=', '%', '#', 
 // lines starting with # are comments, empty lines are ignored
 // terms prefixed with * match anywhere (e.g. "*hardcore")
 // terms without prefix require url boundary chars on both sides
-struct Blacklist {
+struct BlacklistUrlParser {
   std::vector<std::string> anywhere; // match as substring anywhere
   std::vector<std::string> bounded; // require boundary chars
 
   bool loaded = false;
 };
 
-inline Blacklist BLACKLIST;
+inline BlacklistUrlParser BLACKLIST_URL;
 
 inline void load_blacklist(const std::string& path) {
   std::ifstream file(path);
@@ -54,13 +54,13 @@ inline void load_blacklist(const std::string& path) {
       [](unsigned char c) { return std::tolower(c); });
 
     if (line[0] == '*') {
-      BLACKLIST.anywhere.push_back(line.substr(1));
+      BLACKLIST_URL.anywhere.push_back(line.substr(1));
     } else {
-      BLACKLIST.bounded.push_back(line);
+      BLACKLIST_URL.bounded.push_back(line);
     }
   }
 
-  BLACKLIST.loaded = true;
+  BLACKLIST_URL.loaded = true;
 }
 
 class UrlParser {
@@ -138,7 +138,7 @@ private:
   }
 
   bool is_blacklist_in_url() {
-    if (!BLACKLIST.loaded) return false;
+    if (!BLACKLIST_URL.loaded) return false;
 
     std::string lower = url;
     std::transform(lower.begin(), lower.end(), lower.begin(),
@@ -150,11 +150,11 @@ private:
       check.remove_prefix(pos + 3);
     }
 
-    for (const auto& term : BLACKLIST.anywhere) {
+    for (const auto& term : BLACKLIST_URL.anywhere) {
       if (check.find(term) != std::string_view::npos) return true;
     }
 
-    for (const auto& term : BLACKLIST.bounded) {
+    for (const auto& term : BLACKLIST_URL.bounded) {
       size_t pos = 0;
       while ((pos = check.find(term, pos)) != std::string_view::npos) {
         bool left_ok = (pos == 0) || is_url_boundary(check[pos - 1]);
