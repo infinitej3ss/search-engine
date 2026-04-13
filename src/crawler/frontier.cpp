@@ -66,17 +66,22 @@ void load_frontier_filters() {
 
 // tests url against blacklist by iterating though root paths
 bool is_in_blacklist(std::string &url) {
+    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     size_t pos = 7; // skip initial https://
     if(url.length() < 8) {
-        return BLACKLIST.contains(url);
+        bool ret_value = BLACKLIST.contains(url);
+        pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+        return ret_value;
     }
     do {
         pos = url.find('/', pos + 1);
         if (BLACKLIST.contains(url.substr(0, (pos == std::string_view::npos) ? std::string_view::npos : pos))
             || BLACKLIST.contains(url.substr(0, (pos == std::string_view::npos) ? std::string_view::npos : pos + 1))) {
+            pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
             return true;
         }
     } while(pos != std::string_view::npos);
+    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
     return false;
 }
 
@@ -92,10 +97,11 @@ int insert_url(FrontierUrl& url) {
         return -1;
     }
 
+    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
     if (is_in_blacklist(url.url)) {
-        pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
         return -1;
     }
+    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
 
     // add to seen filter
     SEEN.insert(url.url);
@@ -230,12 +236,9 @@ FrontierUrl get_url() {
     pthread_mutex_unlock(&FRONTIER_QUEUES[queue_num].mutex);
 
     // check against blacklist
-    pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     if(is_in_blacklist(frontier_url.url)) {
-        pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
         return get_url();
     }
-    pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
 
     return std::move(frontier_url);
 }

@@ -21,7 +21,7 @@ std::unordered_map<std::string, RobotsCacheEntry> robotsCache;
 get_ssl_return get_ssl(std::string& input_url, std::string& page){
 
     // Check blacklist
-    if (is_in_blacklist(input_url)) return blacklist;
+    if (is_in_blacklist(input_url)) return failure; // already in blacklist so do not need to add it to blacklist
     
     // Check robots.txt cache
     //if (allowed_to_crawl(input_url)) return 
@@ -65,6 +65,13 @@ get_ssl_return get_ssl(std::string& input_url, std::string& page){
         freeaddrinfo(serverInfo);
         return failure;
     }
+
+    struct timeval timeout;
+    timeout.tv_sec = 30;
+    timeout.tv_usec = 0;
+
+    setsockopt(socketFD, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+    setsockopt(socketFD, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
 
     // Connect the socket to the host address.
     int connectResult = connect(socketFD, serverInfo->ai_addr, serverInfo->ai_addrlen);
