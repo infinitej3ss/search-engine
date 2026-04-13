@@ -2,7 +2,6 @@
 
 #include <array>
 #include <string>
-#include <string_view>
 #include <unordered_set>
 #include <algorithm>
 
@@ -98,13 +97,13 @@ inline double t3_rank(const RankerInput& /* input */) {
   return 1.0;
 }
 
-class Ranker {
+class StaticRanker {
 private:
   RankerInput input;
   ParsedUrl parsed_url;
 
 public:
-  Ranker(const RankerInput& input_in) : input(input_in) {
+  StaticRanker(const RankerInput& input_in) : input(input_in) {
     UrlParser parser(input.url);
     parsed_url = parser.parse();
   }

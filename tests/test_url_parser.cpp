@@ -2,7 +2,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <string>
 
-#include "ranker/url_parser.hpp"
+#include "ranker/static/url_parser.hpp"
 
 TEST_CASE("extract_tld", "[url_parser]") {
   auto [url, expected] = GENERATE(table<std::string, std::string>({

@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "ranker/span_finder.hpp"
+#include "ranker/dynamic/span_finder.hpp"
 
 // each test names what the document looks like and what we expect to see.
 // positions_per_term[i] = where the i-th query term appears in the document.
