@@ -12,6 +12,8 @@
 #include <openssl/ssl.h>
 #include <iostream>
 #include <unordered_map>
+#include <chrono>
+#include <thread>
 
 get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     
@@ -20,15 +22,32 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     
     // Check robots.txt cache
     float waitTime = 0;
-    crawl_status status = robotsCache.request_permission_to_crawl(input_url, waitTime);
-    if (status == do_not_crawl) return failure;
+    crawl_status crawlStatus = robotsCache.request_permission_to_crawl(input_url, waitTime);
+    
+    if (crawlStatus == do_not_crawl) return failure;
+    if (crawlStatus == wait_to_crawl) std::this_thread::sleep_for(std::chrono::duration<double>(waitTime));
 
-    // Proceed with fetching HTML
+    int numRedirects = 0;
+
+    std::string redirectUrl;
+    get_ssl_return getSslStatus = get_ssl(input_url, page, redirectUrl);
+
+    if (getSslStatus == blacklist) return blacklist;
+    if (getSslStatus == failure) return failure;
+    
+    // Loop to handle redirects
+    while (getSslStatus == redirect) {
+        numRedirects++;
+        getSslStatus = get_ssl(input_url, page, redirectUrl);
+
+        if (numRedirects > 5) return blacklist;
+    }
+
     return success;
 }
 
 // take a URL and return the HTML
-get_ssl_return get_ssl(const std::string& input_url, std::string& page){
+get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::string& redirectUrl){
 
     ParsedUrlSsl url(input_url.c_str());
 
