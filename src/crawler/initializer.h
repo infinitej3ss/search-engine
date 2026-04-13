@@ -24,6 +24,8 @@ struct Peer {
     std::vector<FrontierUrl> url_send_buffer; // Data waiting to be sent
 };
 
+RobotsCache robotsCache;
+
 std::vector<Peer> peers;
 
 // add endpoints from config file to endpoints vector

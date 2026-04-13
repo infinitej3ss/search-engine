@@ -13,10 +13,10 @@
 using namespace std;
 
 enum fetch_status {
-    NOT_FETCHED,
-    FETCHING,
-    FETCHED,
-    NON_EXISTENT
+    NOT_FETCHED, // robots file is not in the cache
+    FETCHING,    // request for robots file has begun, hasn't been recieved
+    FETCHED,     // robots file is in the cache
+    NON_EXISTENT // robots file was requested, but was not present (crawl your heart out)
 };
 
 enum crawl_status {
@@ -28,6 +28,7 @@ enum crawl_status {
 struct RobotsCacheEntry {
     shared_ptr<RobotsTxt> robotsFile;
     fetch_status status;
+    std::chrono::steady_clock::time_point last_crawled;
 };
 
 inline string url_to_origin(const string &url) {
@@ -50,6 +51,30 @@ class RobotsCache {
     private:
     unordered_map<string, RobotsCacheEntry> cache; // keyed by origin
     mutex cacheMutex;
+
+    void put_cache_entry(const string &origin, RobotsCacheEntry entry){
+        lock_guard<mutex> lock(cacheMutex);
+        cache[origin] = move(entry);
+    }
+
+    void put_cache_status(const string &origin, const fetch_status &status){
+        lock_guard<mutex> lock(cacheMutex);
+        auto it = cache.find(origin);
+        if (it != cache.end()) {
+            it->second.status = status;
+        }
+    }
+
+    RobotsCacheEntry read_cache(const string &origin) {
+        lock_guard<mutex> lock(cacheMutex);
+        
+        auto it = cache.find(origin);
+        if (it != cache.end()) {
+            return it->second; 
+        }
+        
+        return RobotsCacheEntry{nullptr, NOT_FETCHED}; 
+    }
 
     public:
     RobotsCache() {}
@@ -96,33 +121,46 @@ class RobotsCache {
         }
     }
 
-    void put_cache_entry(const string &origin, RobotsCacheEntry entry){
-        lock_guard<mutex> lock(cacheMutex);
-        cache[origin] = move(entry);
-    }
-
-    void put_cache_status(const string &origin, const fetch_status &status){
-        lock_guard<mutex> lock(cacheMutex);
-        auto it = cache.find(origin);
-        if (it != cache.end()) {
-            it->second.status = status;
-        }
-    }
-
-    RobotsCacheEntry read_cache(const string &origin) {
-        lock_guard<mutex> lock(cacheMutex);
+    // check crawlability of a URL
+    crawl_status request_permission_to_crawl(const string &url, float &timeLeftToCrawl) {
+        string origin = url_to_origin(url);
+        
+        lock_guard<mutex> lock(cacheMutex); // Lock for reading/writing the timestamp
         
         auto it = cache.find(origin);
-        if (it != cache.end()) {
-            return it->second; 
+        if (it == cache.end() || it->second.status != FETCHED) {
+            // If we don't have the file or it's still fetching, we shouldn't crawl yet.
+            // (Or if NON_EXISTENT, you can bypass the check depending on your crawler policy).
+            return waiting_to_crawl; 
         }
-        
-        return RobotsCacheEntry{nullptr, NOT_FETCHED}; 
-    }
 
-    // abstraction for checking crawlability of a URL
-    crawl_status allowed_to_crawl(const string &url){
-        // TODO: finish this
-        return can_crawl;
+        if (it->second.status == NON_EXISTENT) return can_crawl;
+
+        int crawlDelay = 0;
+        
+        // 1. Check if the URL itself is actually allowed
+        // The UrlAllowed function optionally reports the crawl delay back to us.
+        bool allowed = it->second.robotsFile->UrlAllowed(
+            (const Utf8*)USER_AGENT.c_str(), 
+            (const Utf8*)url.c_str(), 
+            &crawlDelay
+        );
+
+        if (!allowed) {
+            return do_not_crawl;
+        }
+
+        // 2. Check if enough time has passed since the last crawl
+        auto now = std::chrono::steady_clock::now();
+        auto seconds_since_last_crawl = std::chrono::duration_cast<std::chrono::seconds>(now - it->second.last_crawled).count();
+
+        if (seconds_since_last_crawl >= crawlDelay) {
+            // We are cleared to crawl! Update the timestamp for the next thread.
+            it->second.last_crawled = now;
+            return can_crawl;
+        } else {
+            // We are allowed to crawl this URL, but the origin is on cooldown.
+            return waiting_to_crawl;
+        }
     }
 };

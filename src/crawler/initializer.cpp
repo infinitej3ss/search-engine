@@ -4,14 +4,13 @@
 #include <iostream>
 
 // TODO: Declare RobotsCache object
-RobotsCache robotsCache;
+RobotsCache robots_cache;
 
 // usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir>
 int main(int argc, char** argv){
     
     // add config file endpoints to vector
-    std::string configFile = argv[1];
-    if (initialize_peers(configFile) != 0) return 1;
+    if (initialize_peers(std::string(argv[1])) != 0) return 1;
 
     // initialize frontier
     if (ingest_seedlist(argv[2]) != 0) return 1;

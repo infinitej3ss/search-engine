@@ -15,7 +15,7 @@ void run_worker_thread() {
 
         // get html data from url
         std::string page_html;
-        get_ssl_return ssl_status = get_ssl(frontier_url.url, page_html); // should modify the url for blacklisting
+        get_ssl_return ssl_status = crawl_page(frontier_url.url, page_html); // should modify the url for blacklisting
 
         if (ssl_status == failure) {
             continue;

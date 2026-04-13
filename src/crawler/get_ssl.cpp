@@ -2,6 +2,7 @@
 #include "get_ssl.h"
 #include "robots.txt/RobotsTxt.h"
 #include "robots.txt/RobotsCache.h"
+#include "initializer.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -20,10 +21,12 @@ std::unordered_map<std::string, RobotsCacheEntry> robotsCache;
 get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     
     // Check blacklist
-    if (is_in_blacklist(input_url)) return failure; // already in blacklist so do not need to add it to blacklist
+    if (is_in_blacklist(input_url)) return failure; // already in blacklist
     
     // Check robots.txt cache
-    //if (allowed_to_crawl(input_url)) return 
+    float waitTime = 0;
+    crawl_status status = robotsCache.request_permission_to_crawl(input_url, &waitTime);
+    if (status == do_not_crawl) return failure;
 
     // Proceed with fetching HTML
 
