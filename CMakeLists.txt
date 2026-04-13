@@ -31,6 +31,7 @@ list(REMOVE_ITEM PROJECT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/crawler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/page_file_test.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/robots.txt/Robots.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/majestic_million_parser.cpp
 )
 
 add_executable(tests ${TEST_SOURCES} ${PROJECT_SOURCES})
