@@ -51,3 +51,7 @@ target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE
 add_executable(crawler src/crawler/crawler.cpp ${PROJECT_SOURCES})
 target_link_libraries(crawler PRIVATE OpenSSL::SSL)
 target_include_directories(crawler PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler ${CMAKE_SOURCE_DIR}/src/ranker)
+
+add_executable(majestic src/majestic_million_parser.cpp ${PROJECT_SOURCES})
+target_link_libraries(majestic PRIVATE OpenSSL::SSL)
+target_include_directories(majestic PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler ${CMAKE_SOURCE_DIR}/src/ranker)

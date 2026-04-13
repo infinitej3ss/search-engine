@@ -6,4 +6,3 @@ build/
 
 .vscode/
 crawler_test_files/majestic_million.csv
-src/majestic_million_parser.cpp

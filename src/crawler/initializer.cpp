@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 
+#include "link_distributor.h"
 #include "worker_thread.h"
 
 int initialize_peers(std::string &config_file){
@@ -64,7 +65,9 @@ int8_t ingest_seedlist(const char* seedlist){
         }
         
         FrontierUrl newUrl = {0, currentLine};
-        insert_seed_list(newUrl);
+        if (get_URL_destination(currentLine) == frontier) {
+            insert_seed_list(newUrl);
+        }
     }
 
     return 0;

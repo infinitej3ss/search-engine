@@ -10,6 +10,9 @@
 bool STOP_CRAWLING = false;
 pthread_mutex_t STOP_CRAWLING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 
+bool FILTERS_IN_PROGRESS = false;
+pthread_mutex_t FILTER_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
 bool should_continue_running() {
     bool should_stop;
     pthread_mutex_lock(&STOP_CRAWLING_MUTEX);
@@ -74,8 +77,7 @@ void* run_worker_thread(void* in) {
         // store data
         int write_status = write_page(rank, page_data);
         if(write_status == 1) {
-            write_page_file(rank);
-            if(rank == 0) {
+            if (write_page_file(rank) == 0 && rank == 0) {
                 write_frontier_filters();
             }
         }
