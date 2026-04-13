@@ -177,6 +177,11 @@ int write_page_file(u_int64_t rank_file) {
 
     pthread_mutex_lock(&PAGE_FILES[rank_file].page_file_mutex);
 
+    if (PAGE_FILES[rank_file].size_bytes <= MAX_PAGE_FILE_SIZE_BYTES) {
+        pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
+        return 1;
+    }
+
     std::string file_name = DIR_PATH + "crawled_page_data_rank_" + std::to_string(rank_file) + "_num_" + std::to_string(PAGE_FILES[rank_file].num_files_of_this_rank_written);
     PAGE_FILES[rank_file].num_files_of_this_rank_written++;
 
