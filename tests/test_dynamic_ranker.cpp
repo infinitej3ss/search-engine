@@ -76,7 +76,7 @@ TEST_CASE("score_dynamic stays in [0, 1] for any profile", "[dynamic_ranker]") {
   DocCandidate doc{.title_words = {"python", "tutorial"}};
   std::vector<std::string> query = {"python", "tutorial"};
 
-  for (const auto& profile : {GENERAL, NAVIGATIONAL, FRESHNESS}) {
+  for (const auto& profile : {GENERAL, NAVIGATIONAL}) {
     double s = score_dynamic(query, doc, profile);
     REQUIRE(s >= 0.0);
     REQUIRE(s <= 1.0);

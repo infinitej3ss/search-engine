@@ -16,8 +16,7 @@ struct DocCandidate {
   std::string url;
   std::vector<std::string> title_words;
   std::vector<std::string> anchor_texts;
-  int hop_distance = -1;         // -1 if unknown
-  int64_t crawl_timestamp = 0;   // unix seconds, 0 if unknown
+  int hop_distance = -1;   // -1 if unknown
   std::string domain;
 };
 
@@ -80,12 +79,7 @@ inline double t3_quality(const DocCandidate& /* doc */) {
   return 0.5;
 }
 
-// TODO T4 — freshness: 1 / (1 + days_since/30) when timestamp != 0
-inline double t4_freshness(const DocCandidate& /* doc */) {
-  return 0.5;
-}
-
-// top-level dynamic score = w1·T1 + w2·T2 + w3·T3 + w4·T4
+// top-level dynamic score = w1·T1 + w2·T2 + w3·T3
 inline double score_dynamic(
     const std::vector<std::string>& query,
     const DocCandidate& doc,
@@ -93,10 +87,8 @@ inline double score_dynamic(
   double t1 = t1_metastream(query, doc);
   double t2 = t2_span(query, doc);
   double t3 = t3_quality(doc);
-  double t4 = t4_freshness(doc);
 
   return profile.w_metastream * t1
        + profile.w_span       * t2
-       + profile.w_quality    * t3
-       + profile.w_freshness  * t4;
+       + profile.w_quality    * t3;
 }
