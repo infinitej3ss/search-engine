@@ -1,10 +1,10 @@
-#include "string"
-#include "initializer.h"
 #include "link_distributor.h"
-#include "get_ssl.h"
 
+#include <functional>  // Required for std::hash
 #include <vector>
-#include <functional> // Required for std::hash
+
+#include "get_ssl.h"
+#include "initializer.h"
 
 // maps a URL to a machine ID
 int URL_to_destination(const std::string &url) {

@@ -1,5 +1,14 @@
 #include "worker_thread.h"
 
+#include "HtmlParser.h"
+#include "frontier.h"
+#include "get_ssl.h"
+#include "link_distributor.h"
+#include "page_data.h"
+
+bool STOP_CRAWLING = false;
+pthread_mutex_t STOP_CRAWLING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+
 bool should_continue_running() {
     bool should_stop;
     pthread_mutex_lock(&STOP_CRAWLING_MUTEX);
@@ -15,7 +24,7 @@ void* run_worker_thread(void* in) {
 
         // get html data from url
         std::string page_html;
-        get_ssl_return ssl_status = get_ssl(frontier_url.url, page_html); // should modify the url for blacklisting
+        get_ssl_return ssl_status = crawl_page(frontier_url.url, page_html);  // should modify the url for blacklisting
 
         if (ssl_status == failure) {
             continue;
@@ -61,4 +70,12 @@ void* run_worker_thread(void* in) {
             }
         }
     }
+
+    return nullptr;
+}
+
+void stop_crawling() {
+    pthread_mutex_lock(&STOP_CRAWLING_MUTEX);
+    STOP_CRAWLING = true;
+    pthread_mutex_unlock(&STOP_CRAWLING_MUTEX);
 }

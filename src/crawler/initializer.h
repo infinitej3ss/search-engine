@@ -1,12 +1,13 @@
 #pragma once
 
-#include "frontier.h"
-#include "page_data.h"
-#include "BloomFilter.h"
+#include <netinet/in.h>
 
 #include <string>
 #include <vector>
-#include <netinet/in.h>
+
+#include "BloomFilter.h"
+#include "frontier.h"
+#include "page_data.h"
 
 enum ConnectionState {
     DISCONNECTED,
@@ -24,7 +25,7 @@ struct Peer {
     std::vector<FrontierUrl> url_send_buffer; // Data waiting to be sent
 };
 
-std::vector<Peer> peers;
+inline std::vector<Peer> peers;
 
 // add endpoints from config file to endpoints vector
 int initialize_peers(std::string& config_file);
