@@ -1,10 +1,13 @@
 #include "initializer.h"
-#include "robots.txt/RobotsCache.h"
+
 #include <fstream>
 #include <iostream>
 
+#include "robots.txt/RobotsCache.h"
+#include "worker_thread.h"
+
 // TODO: Declare RobotsCache object
-RobotsCache robots_cache;
+RobotsCache robotsCache;
 
 // usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir>
 int main(int argc, char** argv){
@@ -30,6 +33,7 @@ int main(int argc, char** argv){
 }
 
 int initialize_peers(const std::string &config_file){
+int initialize_peers(std::string &config_file){
     std::ifstream file(config_file);
 
     // file opening error checking

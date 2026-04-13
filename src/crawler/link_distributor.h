@@ -1,4 +1,6 @@
+#pragma once
 #include "string"
+#include "frontier.h"
 
 enum URL_destination {
     frontier,
