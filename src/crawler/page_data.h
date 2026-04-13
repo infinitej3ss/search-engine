@@ -142,3 +142,5 @@ u_int64_t get_page_file_num(const std::string& file_name);
 // Returns:
 //      0 on success, -1 on failure
 int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64_t rank, const u_int64_t num, const u_int64_t index);
+
+u_int64_t rank_bucket_from_double(const double score);

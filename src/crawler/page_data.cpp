@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cmath>
 #include <cstring>
 #include <utility>
 
@@ -420,4 +421,11 @@ int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64
 
     pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
     return 0;
+}
+
+u_int64_t rank_bucket_from_double(const double score) {
+    if(score > 1) {
+        return 0;
+    }
+    return NUM_PAGE_FILE_RANKS - std::ceil(score * NUM_PAGE_FILE_RANKS);
 }
