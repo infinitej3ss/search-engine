@@ -157,6 +157,14 @@ class HtmlParser {
                         size_t special_char = s.find_first_of("&%#+;@");
                         s = s.substr(0, special_char);
 
+                        if(s.length() < 4) {
+                            return no_url;
+                        }
+
+                        if(s.substr(0, 4) != std::string("http")) {
+                            return no_url;
+                        }
+
                         if (s.size() > __UINT16_MAX__) {
                             return no_url;
                         }

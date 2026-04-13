@@ -120,7 +120,7 @@ int write_page(u_int64_t rank_file, PageData& pd) {
     NUM_CRAWLED_PAGES++;
     pthread_mutex_unlock(&NUM_CRAWLED_MUTEX);
 
-    u_int64_t data_size = sizeof(SerializedPageDataHeader) + 2 * sizeof(u_int64_t);
+    u_int64_t data_size = sizeof(SerializedPageDataHeader) + 3 * sizeof(u_int64_t);
     data_size += sizeof(u_int16_t) + pd.url.size();
     for(auto &word : pd.titlewords) {
         data_size += sizeof(u_int16_t) + word.size();
@@ -159,7 +159,7 @@ int write_page(u_int64_t rank_file, PageData& pd) {
     PAGE_FILES[rank_file].page_data_entries.push_back(serialized_data);
 
     // check if page file is now full
-    if (PAGE_FILES[rank_file].size_bytes > PAGE_FILE_SIZE_BYTES) {
+    if (PAGE_FILES[rank_file].size_bytes > MAX_PAGE_FILE_SIZE_BYTES) {
         pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
         return 1;
     }
