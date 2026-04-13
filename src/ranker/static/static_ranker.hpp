@@ -8,9 +8,26 @@
 #include "url_parser.hpp"
 
 // four tiers: top ranked, common commercial, bottom ranked, everything else
-inline const std::unordered_set<std::string> TOP_RANKED_TLDS = {"gov", "edu"};
-inline const std::unordered_set<std::string> MIDDLE_RANKED_TLDS = {"com", "org", "net"};
-inline const std::unordered_set<std::string> BOTTOM_RANKED_TLDS = {"ru", "xyz"};
+inline const std::unordered_set<std::string> TOP_RANKED_TLDS = {
+  "gov", "edu", "mil", "int",
+};
+
+// commercial, country
+inline const std::unordered_set<std::string> MIDDLE_RANKED_TLDS = {
+  "com", "org", "net", "io", "dev", "co", "app", "info",
+  "uk", "de", "ca", "au", "jp", "fr", "nl", "ch", "se", "no",
+  "fi", "dk", "nz", "ie", "at", "be", "it", "es", "pt", "kr",
+};
+
+// spam domains
+// https://blog.cloudflare.com/top-level-domains-email-phishing-threats/
+// https://www.spamhaus.org/resource-hub/domain-reputation/the-most-abused-top-level-domains-in-2018/
+inline const std::unordered_set<std::string> BOTTOM_RANKED_TLDS = {
+  "tk", "ml", "ga", "gq", "cf",
+  "uno", "sbs", "best", "beauty", "top", "hair", "monster",
+  "cyou", "wiki", "makeup",
+  "bar", "pw", "bit",
+};
 
 struct RankerInput {
   // t1
@@ -55,7 +72,11 @@ inline double special_char_density_rank(const ParsedUrl& url) {
   return 1.0 - url.special_char_density;
 }
 
-constexpr size_t T1_NUM_SIGNALS = 6;
+inline double blacklist_rank(const ParsedUrl& url) {
+  return url.blacklist_in_url ? 0.0 : 1.0;
+}
+
+constexpr size_t T1_NUM_SIGNALS = 7;
 
 using T1SignalFn = double(*)(const ParsedUrl&);
 
@@ -66,11 +87,13 @@ constexpr std::array<T1SignalFn, T1_NUM_SIGNALS> T1_SIGNALS = {
   subdomain_depth_rank,
   ip_in_url_rank,
   special_char_density_rank,
+  blacklist_rank,
 };
 
-// default weights — tune via eval
+// weights — tune via eval (tests/test_static_eval.cpp)
+// order: tld, url_len, path_depth, subdomain_depth, ip_in_url, special_char_density, blacklist
 inline std::array<double, T1_NUM_SIGNALS> T1_WEIGHTS = {
-  1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+  3.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0
 };
 
 inline double t1_rank(const ParsedUrl& url) {
@@ -108,7 +131,11 @@ public:
     parsed_url = parser.parse();
   }
 
+  // returns score in [0.0, 1.0] for normal pages
+  // returns -1.0 for hard exclusions (assets, non-content)
   double rank() {
+    if (parsed_url.is_asset) return -1.0;
+
     return t1_rank(parsed_url);
 
     // TODO add t2, t3 later
