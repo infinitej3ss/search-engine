@@ -28,6 +28,8 @@ struct Peer {
 
 inline RobotsCache robotsCache;
 
+inline int machineID;
+
 inline std::vector<Peer> peers;
 
 // add endpoints from config file to endpoints vector

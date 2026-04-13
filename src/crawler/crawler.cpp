@@ -9,7 +9,7 @@
 #include "page_data.h"
 #include "worker_thread.h"
 
-// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count>
+// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count> <machine ID>
 int main(int argc, char** argv) {
     // add config file endpoints to vector
     std::string configFile = argv[1];
@@ -24,8 +24,10 @@ int main(int argc, char** argv) {
     initialize_bloom_filter_dir(std::string(argv[5]));
     load_frontier_filters();
 
-    // connect to peers
-    // establish_peer_connections();
+    machineID = atoi(argv[6]); // read in machineID
+
+    // distribute links
+    start_distribution_server();
 
     // manage worker threads
     int thread_count = atoi(argv[6]);
@@ -40,8 +42,6 @@ int main(int argc, char** argv) {
     for (auto& t : threads) {
         pthread_detach(t);
     }
-
-    // manage connections with peers
 
     // await user input
     bool continue_running = true;

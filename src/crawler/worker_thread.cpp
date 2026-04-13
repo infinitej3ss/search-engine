@@ -26,7 +26,7 @@ void* run_worker_thread(void* in) {
         // get html data from url
         std::string page_html;
         get_ssl_return ssl_status = crawl_page(frontier_url.url, page_html);
-        
+
         if (ssl_status == failure) {
             continue;
         }
@@ -55,6 +55,8 @@ void* run_worker_thread(void* in) {
         u_int64_t rank = rank_bucket_from_double(url_rank.rank());
 
         // distribute links
+
+        start_distribution_server();
 
         u_int32_t new_dist_from_seedlist = frontier_url.distance_from_seedlist + 1;
         for(auto &link : parsed_html.links) {
