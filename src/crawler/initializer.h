@@ -8,6 +8,7 @@
 #include "BloomFilter.h"
 #include "frontier.h"
 #include "page_data.h"
+#include "robots.txt/RobotsCache.h"
 
 enum ConnectionState {
     DISCONNECTED,
@@ -25,7 +26,7 @@ struct Peer {
     std::vector<FrontierUrl> url_send_buffer; // Data waiting to be sent
 };
 
-RobotsCache robotsCache;
+inline RobotsCache robotsCache;
 
 inline std::vector<Peer> peers;
 

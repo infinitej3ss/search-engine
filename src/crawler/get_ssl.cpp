@@ -13,11 +13,6 @@
 #include <iostream>
 #include <unordered_map>
 
-std::string USER_AGENT = "Jess Morton/1.0 (mortonjs@umich.edu)";
-
-// Robots.txt cache
-std::unordered_map<std::string, RobotsCacheEntry> robotsCache;
-
 get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     
     // Check blacklist
@@ -25,7 +20,7 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     
     // Check robots.txt cache
     float waitTime = 0;
-    crawl_status status = robotsCache.request_permission_to_crawl(input_url, &waitTime);
+    crawl_status status = robotsCache.request_permission_to_crawl(input_url, waitTime);
     if (status == do_not_crawl) return failure;
 
     // Proceed with fetching HTML
@@ -35,7 +30,7 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page){
 // take a URL and return the HTML
 get_ssl_return get_ssl(std::string& input_url, std::string& page){
 
-    ParsedUrl url(input_url.c_str());
+    ParsedUrlSsl url(input_url.c_str());
 
     // Get the host address.
     struct addrinfo hints;

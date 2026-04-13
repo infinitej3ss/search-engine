@@ -22,18 +22,19 @@ find_package(OpenSSL COMPONENTS SSL)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
-file(GLOB PROJECT_SOURCES CONFIGURE_DEPENDS src/*.cpp src/crawler/*.cpp)
+file(GLOB PROJECT_SOURCES CONFIGURE_DEPENDS src/*.cpp src/crawler/*.cpp src/crawler/robots.txt/*.cpp)
 list(REMOVE_ITEM PROJECT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 
 list(REMOVE_ITEM PROJECT_SOURCES 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/crawler.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/page_file_test.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/crawler/robots.txt/Robots.cpp
 )
 
 add_executable(tests ${TEST_SOURCES} ${PROJECT_SOURCES})
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
 target_link_libraries(tests PRIVATE OpenSSL::SSL)
-target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler)
+target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler ${CMAKE_SOURCE_DIR}/src/ranker)
 enable_testing()
 
 include(CTest)
@@ -42,8 +43,8 @@ catch_discover_tests(tests)
 
 add_executable(engine src/main.cpp ${PROJECT_SOURCES})
 target_link_libraries(engine PRIVATE OpenSSL::SSL)
-target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler)
+target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler ${CMAKE_SOURCE_DIR}/src/ranker)
 
 add_executable(crawler src/crawler/crawler.cpp ${PROJECT_SOURCES})
 target_link_libraries(crawler PRIVATE OpenSSL::SSL)
-target_include_directories(crawler PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler)
+target_include_directories(crawler PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/crawler ${CMAKE_SOURCE_DIR}/src/ranker)

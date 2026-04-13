@@ -5,6 +5,7 @@
 #include "get_ssl.h"
 #include "link_distributor.h"
 #include "page_data.h"
+#include "ranker/static/static_ranker.hpp"
 
 bool STOP_CRAWLING = false;
 pthread_mutex_t STOP_CRAWLING_MUTEX = PTHREAD_MUTEX_INITIALIZER;
@@ -44,7 +45,11 @@ void* run_worker_thread(void* in) {
         page_data.words = std::move(parsed_html.words);
 
         // decide if this page is worth storing
-        u_int64_t rank = 0; // TODO: decide rank group this page belongs to
+        RankerInput rank_input;
+        rank_input.hop_distance = frontier_url.distance_from_seedlist;
+        rank_input.url = frontier_url.url;
+        StaticRanker url_rank(rank_input);
+        u_int64_t rank = rank_bucket_from_double(url_rank.rank());
 
         // distribute links
 

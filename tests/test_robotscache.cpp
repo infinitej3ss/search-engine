@@ -2,7 +2,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "crawler/robots.txt/RobotsCache.h"
-#include "crawler/robots.txt/RobotsTxt.cpp"
+#include "crawler/robots.txt/RobotsTxt.h"
 
 using Catch::Matchers::WithinAbs;
 

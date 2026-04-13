@@ -5,6 +5,8 @@
 #include <chrono>
 #include <memory>
 
+inline std::string USER_AGENT = "Jess Morton/1.0 (mortonjs@umich.edu)";
+
 enum get_ssl_return {
     failure,
     blacklist,
@@ -18,12 +20,12 @@ enum robots_cache_status {
     not_yet_fetched
 };
 
-class ParsedUrl {
+class ParsedUrlSsl {
    public:
       const char *CompleteUrl;
       char *Service, *Host, *Port, *Path;
 
-      ParsedUrl( const char *url ) {
+      ParsedUrlSsl( const char *url ) {
          // Assumes url points to static text but
          // does not check.
 
@@ -80,7 +82,7 @@ class ParsedUrl {
             Host = Path = p;
          }
 
-      ~ParsedUrl( )
+      ~ParsedUrlSsl( )
          {
          delete[ ] pathBuffer;
          }

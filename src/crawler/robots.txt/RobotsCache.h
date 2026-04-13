@@ -147,6 +147,7 @@ class RobotsCache {
         );
 
         if (!allowed) {
+            lock_guard<mutex> unlock(cacheMutex);
             return do_not_crawl;
         }
 
@@ -157,9 +158,11 @@ class RobotsCache {
         if (seconds_since_last_crawl >= crawlDelay) {
             // We are cleared to crawl! Update the timestamp for the next thread.
             it->second.last_crawled = now;
+            lock_guard<mutex> unlock(cacheMutex);
             return can_crawl;
         } else {
             // We are allowed to crawl this URL, but the origin is on cooldown.
+            lock_guard<mutex> unlock(cacheMutex);
             return waiting_to_crawl;
         }
     }

@@ -5,14 +5,15 @@
 #include <unistd.h>
 
 #include <cstring>
-#include <random>
 #include <queue>
-#include <utility>
+#include <random>
 #include <string_view>
+#include <utility>
 
 #include "BloomFilter.h"
-#include "page_data.h"
 #include "get_ssl.h"
+#include "page_data.h"
+#include "ranker/static/static_ranker.hpp"
 
 // stores a queue of frontier urls
 struct FrontierQueue {
@@ -109,7 +110,11 @@ int insert_url(const FrontierUrl& input_url) {
     pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
 
     // determine rank of url
-    u_int64_t rank = 0;
+    RankerInput rank_input;
+    rank_input.hop_distance = url.distance_from_seedlist;
+    rank_input.url = url.url;
+    StaticRanker url_rank(rank_input);
+    u_int64_t rank = rank_bucket_from_double(url_rank.rank());
     if (rank > NUM_FRONTIER_QUEUES) {
         return -1;
     }

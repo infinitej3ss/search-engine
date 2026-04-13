@@ -3,36 +3,8 @@
 #include <fstream>
 #include <iostream>
 
-#include "robots.txt/RobotsCache.h"
 #include "worker_thread.h"
 
-// TODO: Declare RobotsCache object
-RobotsCache robotsCache;
-
-// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir>
-int main(int argc, char** argv){
-    
-    // add config file endpoints to vector
-    if (initialize_peers(std::string(argv[1])) != 0) return 1;
-
-    // initialize frontier
-    if (ingest_seedlist(argv[2]) != 0) return 1;
-
-    // initialize directories
-    initialize_page_file_dir(std::string(argv[3]));
-    initialize_frontier_file_dir(std::string(argv[4]));
-    initialize_bloom_filter_dir(std::string(argv[5]));
-    load_frontier_filters();
-    
-    // connect to peers
-    establish_peer_connections();
-
-    // manage worker threads
-
-    // manage connections with peers
-}
-
-int initialize_peers(const std::string &config_file){
 int initialize_peers(std::string &config_file){
     std::ifstream file(config_file);
 
