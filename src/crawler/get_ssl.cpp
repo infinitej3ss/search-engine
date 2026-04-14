@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <chrono>
 #include <thread>
+#include <algorithm>
+#include <cctype>
 
 get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     
@@ -27,10 +29,11 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     if (crawlStatus == do_not_crawl) return failure;
     if (crawlStatus == wait_to_crawl) std::this_thread::sleep_for(std::chrono::duration<double>(waitTime));
 
+    std::string current_url = input_url;
     int numRedirects = 0;
 
     std::string redirectUrl;
-    get_ssl_return getSslStatus = get_ssl(input_url, page, redirectUrl);
+    get_ssl_return getSslStatus = get_ssl(current_url, page, redirectUrl);
 
     if (getSslStatus == blacklist) return blacklist;
     if (getSslStatus == failure) return failure;
@@ -38,7 +41,8 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page){
     // Loop to handle redirects
     while (getSslStatus == redirect) {
         numRedirects++;
-        getSslStatus = get_ssl(input_url, page, redirectUrl);
+        current_url = redirectUrl;
+        getSslStatus = get_ssl(current_url, page, redirectUrl);
 
         if (numRedirects > 5) return blacklist;
     }
@@ -181,6 +185,18 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
 
     size_t headerEnd = headerBuf.find("\r\n\r\n");
 
+    // redirect logic
+    if (extract_redirect_url(headerBuf, std::string(url.Host), redirectUrl)) {
+        // Cleanup connections before returning early
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        close(socketFD);
+        SSL_CTX_free(ctx);
+        freeaddrinfo(serverInfo);
+
+        return redirect;
+    }
+
     std::string outputData = "";
 
     if (headerEnd != std::string::npos) {
@@ -251,4 +267,52 @@ std::string upgrade_to_https(const std::string &url) {
     }
     
     return "https://" + url;
+}
+
+// Helper function to extract and format a redirect URL from HTTP headers
+bool extract_redirect_url(const std::string& headerBuf, const std::string& host, std::string& redirectUrl) {
+    
+    // extract HTTP Status Code from the first line
+    int statusCode = 0;
+    size_t firstSpace = headerBuf.find(' ');
+    if (firstSpace != std::string::npos) {
+        size_t secondSpace = headerBuf.find(' ', firstSpace + 1);
+        if (secondSpace != std::string::npos) {
+            std::string codeStr = headerBuf.substr(firstSpace + 1, secondSpace - firstSpace - 1);
+            try { statusCode = std::stoi(codeStr); } catch (...) {}
+        }
+    }
+
+    // check if it's a 3xx Redirect Code
+    if (statusCode >= 300 && statusCode < 400) {
+       
+        // search for location header (case-insensitive search)
+        std::string lowerHeaders = headerBuf;
+        std::transform(lowerHeaders.begin(), lowerHeaders.end(), lowerHeaders.begin(), ::tolower);
+        
+        size_t locPos = lowerHeaders.find("\r\nlocation: ");
+        if (locPos != std::string::npos) {
+            locPos += 12; // Length of "\r\nlocation: "
+            size_t endLoc = headerBuf.find("\r\n", locPos);
+            
+            if (endLoc != std::string::npos) {
+                redirectUrl = headerBuf.substr(locPos, endLoc - locPos);
+                
+                // trim leading/trailing whitespace
+                redirectUrl.erase(0, redirectUrl.find_first_not_of(" \t"));
+                redirectUrl.erase(redirectUrl.find_last_not_of(" \t") + 1);
+
+                // handle relative redirects
+                if (!redirectUrl.empty() && redirectUrl[0] == '/') {
+                    redirectUrl = "https://" + host + redirectUrl;
+                } else if (redirectUrl.find("http") != 0) {
+                    redirectUrl = "https://" + host + "/" + redirectUrl;
+                }
+                
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }

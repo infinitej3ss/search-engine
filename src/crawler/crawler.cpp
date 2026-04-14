@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <csignal>
 
 #include "BloomFilter.h"
 #include "frontier.h"
@@ -12,6 +13,9 @@
 
 // usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count> <machine ID>
 int main(int argc, char** argv) {
+
+    signal(SIGPIPE, SIG_IGN); // don't crash on broken pipes
+
     // add config file endpoints to vector
     std::string configFile = argv[1];
     if (initialize_peers(configFile) != 0) return 1;
