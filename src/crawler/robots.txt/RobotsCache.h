@@ -62,6 +62,7 @@ class RobotsCache {
         auto it = cache.find(origin);
         if (it != cache.end()) {
             it->second.status = status;
+            it->second.last_crawled = std::chrono::steady_clock::now();
         }
     }
 
@@ -92,31 +93,23 @@ class RobotsCache {
     }
 
     // Returns true if the request was successful
-    bool request_robots_file(const string &url) {
-
-        string origin = url_to_origin(url); // convert URL to origin (scheme + domain + port)
-
-        // set status to FETCHING
-        {
-            lock_guard<mutex> lock(cacheMutex);
-            cache[origin] = RobotsCacheEntry{nullptr, FETCHING};
-        }
-
+    bool request_robots_file(const string& url) {
         // getssl request for robots.txt
         string pageData;
-        string robotsURL = origin + "/robots.txt";
+        string robotsURL = url + "/robots.txt";
         string redirect;
         get_ssl_return returnStatus = get_ssl(robotsURL, pageData, redirect);
 
+
         // update cache
-        if (returnStatus != success) { 
-            put_cache_status(origin, NON_EXISTENT);
+        if (returnStatus != success) {
+            put_cache_status(url, NON_EXISTENT);
             return false;
         } else {
-            put_cache_entry(origin, RobotsCacheEntry{
-                make_shared<RobotsTxt>((uint8_t*)pageData.data(), pageData.length()), 
-                FETCHED
-            });
+            auto now = std::chrono::steady_clock::now();
+            put_cache_entry(url, RobotsCacheEntry { make_shared<RobotsTxt>((uint8_t*)pageData.data(), pageData.length()),
+                                                        FETCHED,
+                                                        now });
 
             return true;
         }
@@ -126,36 +119,52 @@ class RobotsCache {
     crawl_status request_permission_to_crawl(const string &url, float &timeLeftToCrawl) {
         string origin = url_to_origin(url);
         
-        lock_guard<mutex> lock(cacheMutex); // lock for reading/writing the timestamp
+        unique_lock<mutex> lock(cacheMutex); // lock for reading/writing the timestamp
         
+        bool flag = false;
         auto it = cache.find(origin);
-        if (it == cache.end() || it->second.status != FETCHED) {
-            // If we don't have the file or it's still fetching, we shouldn't crawl yet.
-            // (Or if NON_EXISTENT, you can bypass the check depending on your crawler policy).
-            return wait_to_crawl; 
+        if (it == cache.end() || it->second.status == FETCHING) {
+            // if there is no entry, fetch the robots.txt
+            if (it == cache.end()) {
+                string origin = url_to_origin(url);  // convert URL to origin (scheme + domain + port)
+
+                // set status to FETCHING
+                cache[origin] = RobotsCacheEntry{nullptr, FETCHING};
+                lock.unlock();
+                request_robots_file(origin);
+                lock.lock();
+                it = cache.find(origin);
+                flag = true;
+                timeLeftToCrawl = 0;
+            } else {
+                timeLeftToCrawl = 1;
+                return wait_to_crawl;
+            }
         }
 
-        if (it->second.status == NON_EXISTENT) return can_crawl;
-
         int crawlDelay = 0;
-        
-        // check if the URL itself is actually allowed
-        // The UrlAllowed function optionally reports the crawl delay back to us.
-        bool allowed = it->second.robotsFile->UrlAllowed(
-            (const Utf8*)USER_AGENT.c_str(), 
-            (const Utf8*)url.c_str(), 
-            &crawlDelay
-        );
 
-        if (!allowed) {
-            return do_not_crawl;
+        if (it->second.status != NON_EXISTENT) {
+            // check if the URL itself is actually allowed
+            // The UrlAllowed function optionally reports the crawl delay back to us.
+            bool allowed = it->second.robotsFile->UrlAllowed(
+                (const Utf8*)USER_AGENT.c_str(),
+                (const Utf8*)url.c_str(),
+                &crawlDelay);
+            if (!allowed) {
+                return do_not_crawl;
+            }
+        }
+
+        if (crawlDelay < 1) {
+            crawlDelay = 1;
         }
 
         // check if enough time has passed since the last crawl
         auto now = std::chrono::steady_clock::now();
         auto seconds_since_last_crawl = std::chrono::duration_cast<std::chrono::seconds>(now - it->second.last_crawled).count();
 
-        if (seconds_since_last_crawl >= crawlDelay) {
+        if (seconds_since_last_crawl >= crawlDelay || flag) {
             // We are cleared to crawl! Update the timestamp for the next thread.
             it->second.last_crawled = now;
             return can_crawl;

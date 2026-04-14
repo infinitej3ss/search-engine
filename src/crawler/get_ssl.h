@@ -7,6 +7,10 @@
 
 inline std::string USER_AGENT = "Jess Morton/1.0 (mortonjs@umich.edu)";
 
+inline pthread_mutex_t dns_mutex = PTHREAD_MUTEX_INITIALIZER;
+inline bool dns_wait = false;
+inline pthread_cond_t dns_cv = PTHREAD_COND_INITIALIZER;
+
 enum get_ssl_return {
     failure,
     blacklist,

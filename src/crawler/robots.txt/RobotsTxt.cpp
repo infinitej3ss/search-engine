@@ -904,7 +904,7 @@ Directive *RobotsTxt::FindDirective( const Utf8 *user, const Utf8 *path,
     Directive *bestDirective = nullptr;
     Rule *bestRule = nullptr;
     bool bestMatchedWildcard = false;
-    int maxCrawlDelay = 0;
+    int maxCrawlDelay = 1; // default 1s
 
     for (auto r : rules) {
         // check if any user agent in this rule matches

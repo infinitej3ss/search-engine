@@ -16,18 +16,22 @@
 #include <thread>
 #include <algorithm>
 #include <cctype>
+#include <signal.h>
+#include <pthread.h>
 
-get_ssl_return crawl_page(const std::string& input_url, std::string& page){
-    
+get_ssl_return crawl_page(const std::string& input_url, std::string& page) {
     // Check blacklist
     if (is_in_blacklist(input_url)) return failure; // already in blacklist
     
     // Check robots.txt cache
     float waitTime = 0;
-    crawl_status crawlStatus = robotsCache.request_permission_to_crawl(input_url, waitTime);
-    
+    crawl_status crawlStatus;
+    do {
+        crawlStatus = robotsCache.request_permission_to_crawl(input_url, waitTime);
+        if (crawlStatus == wait_to_crawl) std::this_thread::sleep_for(std::chrono::duration<double>(waitTime));
+    } while (crawlStatus == wait_to_crawl);
+
     if (crawlStatus == do_not_crawl) return failure;
-    if (crawlStatus == wait_to_crawl) std::this_thread::sleep_for(std::chrono::duration<double>(waitTime));
 
     std::string current_url = input_url;
     int numRedirects = 0;
@@ -75,6 +79,19 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
     int status = getaddrinfo(url.Host, portToUse, &hints, &serverInfo);
 
     if (status != 0) {
+        if (status == -5 || status == -3) {
+            pthread_mutex_lock(&dns_mutex);
+            while(dns_wait) {
+                pthread_cond_wait(&dns_cv, &dns_mutex);
+            }
+            dns_wait = true;
+            pthread_mutex_unlock(&dns_mutex);
+            std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double, std::ratio<1>>(1)));  // avoid spamming
+            pthread_mutex_lock(&dns_mutex);
+            dns_wait = false;
+            pthread_cond_signal(&dns_cv);
+            pthread_mutex_unlock(&dns_mutex);
+        }
         std::cerr << "Error: " << gai_strerror(status) << std::endl;
         return failure;
     }
@@ -113,7 +130,12 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
     // to the socket we've connected.
     SSL_library_init();
 
-    SSL_CTX *ctx = SSL_CTX_new( SSLv23_method());
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
+    SSL_CTX* ctx = SSL_CTX_new(SSLv23_method());
 
     SSL *ssl = SSL_new(ctx);
     SSL_set_fd(ssl, socketFD);
