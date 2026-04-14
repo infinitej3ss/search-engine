@@ -35,7 +35,7 @@ struct FrontierStagingVector {
 };
 
 const u_int64_t NUM_FRONTIER_QUEUES = 10;
-const u_int64_t NUM_URLS_PER_FILE = 1000;
+const u_int64_t NUM_URLS_PER_FILE = 10000;
 
 FrontierQueue FRONTIER_QUEUES[NUM_FRONTIER_QUEUES];
 FrontierStagingFileQueue STAGING_FILE_QUEUES[NUM_FRONTIER_QUEUES];
@@ -89,7 +89,7 @@ bool is_in_blacklist(const std::string &url) {
 // inserts url into the frontier
 int insert_url(const FrontierUrl& input_url) {
 
-    FrontierUrl url = FrontierUrl{0, upgrade_to_https(input_url.url), {}};
+    FrontierUrl url = FrontierUrl{input_url.distance_from_seedlist, upgrade_to_https(input_url.url), std::move(input_url.anchor_text)};
 
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
     // check url against already seen and blacklisted domains bloom filters

@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
     initialize_bloom_filter_dir(std::string(argv[5]));
     load_frontier_filters();
 
-    machineID = atoi(argv[6]); // read in machineID
+    machineID = atoi(argv[7]); // read in machineID
 
     // distribute links
     pthread_t server_thread;
