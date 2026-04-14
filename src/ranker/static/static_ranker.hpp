@@ -34,13 +34,14 @@ struct RankerInput {
   std::string url;
 
   // t2
-  size_t word_count;
-  double content_to_html_ratio;
+  bool is_https;
+  size_t pages_per_domain; // probably skipping
+  size_t hop_distance;
 
   // t3
-  bool is_https;
-  size_t pages_per_domain;
-  size_t hop_distance;
+  size_t word_count; // maybe skipping?
+  double content_to_html_ratio; // probably skipping
+
 };
 
 // t1 signal functions — each takes a parsed url and returns a score in [0, 1]
@@ -92,6 +93,7 @@ constexpr std::array<T1SignalFn, T1_NUM_SIGNALS> T1_SIGNALS = {
 
 // weights — tune via eval (tests/test_static_eval.cpp)
 // order: tld, url_len, path_depth, subdomain_depth, ip_in_url, special_char_density, blacklist
+// TODO refactor into config
 inline std::array<double, T1_NUM_SIGNALS> T1_WEIGHTS = {
   3.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0
 };
@@ -110,12 +112,12 @@ inline double t1_rank(const ParsedUrl& url) {
   return weight_sum > 0.0 ? total / weight_sum : 0.0;
 }
 
-// TODO t2 — content-based ranking
-inline double t2_rank(const RankerInput& /* input */) {
-  return 1.0;
+// TODO t2 — domain/hop-based ranking (hop based only currently)
+inline double t2_rank(const RankerInput& input) {
+  return 1.0 / (1 + input.hop_distance);
 }
 
-// TODO t3 — domain/hop-based ranking
+// TODO t2 — content-based ranking
 inline double t3_rank(const RankerInput& /* input */) {
   return 1.0;
 }
@@ -136,8 +138,8 @@ public:
   double rank() {
     if (parsed_url.is_asset) return -1.0;
 
-    return t1_rank(parsed_url);
+    return (3.0 * t1_rank(parsed_url) + 2.0 * t2_rank(input)) / 5.0;
 
-    // TODO add t2, t3 later
+    // TODO add t3 later
   }
 };
