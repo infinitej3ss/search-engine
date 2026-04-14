@@ -9,6 +9,10 @@ enum URL_destination {
 
 const int URL_BATCH_SIZE = 10000;
 
+inline int machineID;
+
+inline std::vector<Peer> peers;
+
 // gets whether a URL is for the frontier or a remote machine, writes to destinationID
 URL_destination get_URL_destination(std::string &url, int &destinationID);
 

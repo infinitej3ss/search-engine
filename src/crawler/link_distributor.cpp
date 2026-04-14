@@ -27,7 +27,6 @@ URL_destination get_URL_destination(std::string &url, int &destinationID){
 
 // manages URLs that are sent to remote peers
 void send_URL_to_remote_peer(FrontierUrl &url, int machineID){
-    // TODO: implement
 
     // append url to file for the target machine
 
