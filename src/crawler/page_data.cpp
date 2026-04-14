@@ -215,6 +215,12 @@ int write_page_file(u_int64_t rank_file) {
     }
 
     close(fd);
+
+    // reset file in memory
+    PAGE_FILES[rank_file].num_pages = 0;
+    PAGE_FILES[rank_file].size_bytes = 0;
+    PAGE_FILES[rank_file].page_data_entries = std::vector<std::vector<u_int8_t>>();
+
     pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
 
     return 0;

@@ -35,7 +35,7 @@ struct FrontierStagingVector {
 };
 
 const u_int64_t NUM_FRONTIER_QUEUES = 10;
-const u_int64_t NUM_URLS_PER_FILE = 10000;
+const u_int64_t NUM_URLS_PER_FILE = 1000;
 
 FrontierQueue FRONTIER_QUEUES[NUM_FRONTIER_QUEUES];
 FrontierStagingFileQueue STAGING_FILE_QUEUES[NUM_FRONTIER_QUEUES];
@@ -128,27 +128,31 @@ int insert_url(const FrontierUrl& input_url) {
     if (STAGING_VECTORS[rank].data.size() > NUM_URLS_PER_FILE) {
         // write to disk
         std::string file_name = FRONTIER_DIR_PATH + "frontier_file_rank_" + std::to_string(rank) + "_num_" + std::to_string(STAGING_VECTORS[rank].num_written);
+        STAGING_VECTORS[rank].num_written++;
 
         u_int64_t file_size = serialized_frontier_url_vector_size(STAGING_VECTORS[rank].data);
 
-        char* buffer = new char[file_size];
+        u_int8_t* buf = new u_int8_t[file_size];
+        u_int8_t* buffer = buf;
         serialize_frontier_url_vector((void**)&buffer, STAGING_VECTORS[rank].data);
 
         int fd = open(file_name.c_str(), O_WRONLY | O_CREAT, S_IRWXU);
         if (fd == -1) {
             close(fd);
             pthread_mutex_unlock(&STAGING_VECTORS[rank].mutex);
+            delete[] buf;
             return -1;
         }
 
-        if (write(fd, buffer, file_size) != file_size) {
+        if (write(fd, buf, file_size) != file_size) {
             close(fd);
             pthread_mutex_unlock(&STAGING_VECTORS[rank].mutex);
+            delete[] buf;
             return -1;
         }
 
         close(fd);
-        delete[] buffer;
+        delete[] buf;
 
         // reset vector
         STAGING_VECTORS[rank].data = std::vector<FrontierUrl>();
@@ -209,7 +213,7 @@ FrontierUrl get_url() {
         STAGING_FILE_QUEUES[queue_num].data.pop();
         pthread_mutex_unlock(&STAGING_FILE_QUEUES[queue_num].mutex);
 
-        int fd = open(file_name.c_str(), O_WRONLY, S_IRWXU);
+        int fd = open(file_name.c_str(), O_RDONLY, S_IRWXU);
         if(fd == -1) {
             close(fd);
             // try another queue
@@ -221,10 +225,17 @@ FrontierUrl get_url() {
         fstat(fd, &statbuf);
         u_int64_t file_size = statbuf.st_size;
 
-        char* buf = new char[file_size];
-        read(fd, buf, file_size);
+        u_int8_t* buffer = new u_int8_t[file_size];
+        u_int8_t* buf = buffer;
+        ssize_t read_bytes = read(fd, buf, file_size);
+        if (read_bytes != file_size) {
+            close(fd);
+            // try another queue
+            pthread_mutex_unlock(&FRONTIER_QUEUES[queue_num].mutex);
+            return get_url();
+        }
         std::vector<FrontierUrl> urls = deserialize_frontier_url_vector((void**)&buf);
-        delete[] buf;
+        delete[] buffer;
 
         for(auto &u : urls) {
             FRONTIER_QUEUES[queue_num].data.push(u);
@@ -362,7 +373,7 @@ int initialize_frontier_file_dir(const std::string& dir) {
 u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl>& v) {
     u_int64_t file_size = sizeof(u_int64_t);
     for (auto& frontier_url : v) {
-        file_size += sizeof(u_int32_t) + frontier_url.url.size() + sizeof(u_int64_t);
+        file_size += sizeof(u_int32_t) + sizeof(u_int16_t) + frontier_url.url.size() + sizeof(u_int64_t);
         for(auto& word : frontier_url.anchor_text) {
             file_size += sizeof(u_int16_t) + word.size();
         }
