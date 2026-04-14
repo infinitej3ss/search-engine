@@ -8,6 +8,7 @@
 #include "initializer.h"
 #include "page_data.h"
 #include "worker_thread.h"
+#include "link_distributor.h"
 
 // usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count> <machine ID>
 int main(int argc, char** argv) {
@@ -27,7 +28,11 @@ int main(int argc, char** argv) {
     machineID = atoi(argv[6]); // read in machineID
 
     // distribute links
-    start_distribution_server();
+    pthread_t server_thread;
+    if (pthread_create(&server_thread, nullptr, start_distribution_server, nullptr) != 0){
+        std::cerr << "Error creating distribution server" << std::endl;
+        return 1;
+    }
 
     // manage worker threads
     int thread_count = atoi(argv[6]);

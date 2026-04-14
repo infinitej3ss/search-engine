@@ -22,4 +22,4 @@ void send_URL_to_remote_peer(FrontierUrl &url, int machineID);
 void send_remote_peer_URL_vector(int machineID);
 
 // listens on a loop for peers trying to send URL vectors
-void start_distribution_server();
+void* start_distribution_server(void* arg);
