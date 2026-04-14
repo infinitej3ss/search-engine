@@ -33,18 +33,17 @@ URL_destination get_URL_destination(std::string &url, int &remoteID){
 // send a specified machine its list of links and clear it
 int send_remote_peer_URL_vector(int remoteID) {
     
-    // 1. Allocate a large enough buffer for the serialized data (e.g., 10 MB)
-    // Adjust this size if your URL batches are expected to be larger!
+    // allocate 10MB for the serialized data
     void* originalBuffer = malloc(10 * 1024 * 1024);
     if (originalBuffer == nullptr) return -1; 
 
-    // 2. Create a secondary pointer for the serialization function to move
+    // create a secondary pointer for the serialization function to move
     void* movingPointer = originalBuffer;
 
     // serialize file data into buffer
     serialize_frontier_url_vector(&movingPointer, peers[remoteID].url_send_buffer);
 
-    // 3. Calculate exact byte size using pointer math
+    // calculate size of bytes to be sent
     size_t dataSize = (uint8_t*)movingPointer - (uint8_t*)originalBuffer;
 
     // create TCP socket for the sender
@@ -71,7 +70,6 @@ int send_remote_peer_URL_vector(int remoteID) {
     shutdown(my_socket, SHUT_WR);
 
     // recv for "OK"
-    // TODO: timeout after blocking for a certain period of time
     char ackBuffer[64];
     memset(ackBuffer, 0, sizeof(ackBuffer));
     recv(my_socket, ackBuffer, sizeof(ackBuffer), 0);
