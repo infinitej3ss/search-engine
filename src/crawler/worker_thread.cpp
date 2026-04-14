@@ -29,7 +29,7 @@ void* run_worker_thread(void* in) {
         // get html data from url
         std::string page_html;
         get_ssl_return ssl_status = crawl_page(frontier_url.url, page_html);
-        
+
         if (ssl_status == failure) {
             continue;
         }
@@ -57,18 +57,17 @@ void* run_worker_thread(void* in) {
         }
         u_int64_t rank = rank_bucket_from_double(url_rank.rank());
 
-        // distribute links
 
         u_int32_t new_dist_from_seedlist = frontier_url.distance_from_seedlist + 1;
         for(auto &link : parsed_html.links) {
-            URL_destination URL_dest = get_URL_destination(link.URL);
+            int destID;
+            URL_destination URL_dest = get_URL_destination(link.URL, destID);
             FrontierUrl frontier_url = {new_dist_from_seedlist, link.URL, link.anchorText};
 
             if (URL_dest == frontier){ // if URL is for frontier
                 insert_url(frontier_url);
             } else {                   // if URL is for a remote host
-                int destHost = URL_to_destination(link.URL);
-                send_URL_to_remote_peer(frontier_url, destHost);
+                send_URL_to_remote_peer(frontier_url, destID);
             }
         }
 

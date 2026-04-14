@@ -10,25 +10,13 @@
 #include "page_data.h"
 #include "robots.txt/RobotsCache.h"
 
-enum ConnectionState {
-    DISCONNECTED,
-    CONNECTING,
-    CONNECTED
-};
-
 struct Peer {
     std::string ip_address;   // To know where to reconnect
     int port;                 // To know where to reconnect
-    
-    int socket_fd;            // The active file descriptor (e.g., -1 if disconnected)
-    ConnectionState state;    // Current status of the connection
-    
     std::vector<FrontierUrl> url_send_buffer; // Data waiting to be sent
 };
 
 inline RobotsCache robotsCache;
-
-inline std::vector<Peer> peers;
 
 // add endpoints from config file to endpoints vector
 int initialize_peers(std::string& config_file);
