@@ -138,7 +138,7 @@ public:
   double rank() {
     if (parsed_url.is_asset) return -1.0;
 
-    return (3.0 * t1_rank(parsed_url) + 2.0 * t2_rank(input)) / 5.0;
+    return t1_rank(parsed_url) * t2_rank(input);
 
     // TODO add t3 later
   }
