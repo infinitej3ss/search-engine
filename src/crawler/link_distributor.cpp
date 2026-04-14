@@ -30,11 +30,38 @@ URL_destination get_URL_destination(std::string &url, int &remoteID){
     return frontier;
 }
 
+void send_URL_to_remote_peer(FrontierUrl &url, int remoteID){
+
+    // lock mutex
+    url_buffer_mutex.lock();
+
+    peers[remoteID].url_send_buffer.push_back(url);
+
+    if (peers[remoteID].url_send_buffer.size() > URL_BATCH_SIZE) {
+        url_buffer_mutex.unlock();
+        send_remote_peer_URL_vector(remoteID);
+        return;
+    }
+
+    // unlock mutex
+    url_buffer_mutex.unlock();
+}
+
 // send a specified machine its list of links and clear it
 int send_remote_peer_URL_vector(int remoteID) {
     
-    // allocate 10MB for the serialized data
-    void* originalBuffer = malloc(10 * 1024 * 1024);
+    url_buffer_mutex.lock(); // request lock
+
+    // make sure vector hasn't been cleared while waiting for mutex
+    if (peers[remoteID].url_send_buffer.size() <= URL_BATCH_SIZE) {
+        url_buffer_mutex.unlock();
+        return 0;
+    }
+
+    size_t dataSize = serialized_frontier_url_vector_size(peers[remoteID].url_send_buffer);
+
+    // allocate for the serialized data
+    void* originalBuffer = malloc(dataSize);
     if (originalBuffer == nullptr) return -1; 
 
     // create a secondary pointer for the serialization function to move
@@ -42,9 +69,6 @@ int send_remote_peer_URL_vector(int remoteID) {
 
     // serialize file data into buffer
     serialize_frontier_url_vector(&movingPointer, peers[remoteID].url_send_buffer);
-
-    // calculate size of bytes to be sent
-    size_t dataSize = (uint8_t*)movingPointer - (uint8_t*)originalBuffer;
 
     // create TCP socket for the sender
     int my_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -78,12 +102,9 @@ int send_remote_peer_URL_vector(int remoteID) {
     free(originalBuffer);
     close(my_socket);
 
-    // clear vector
-    {
-        std::lock_guard<std::mutex> lock(url_buffer_mutex);
-        peers[remoteID].url_send_buffer.clear();
-    }
+    peers[remoteID].url_send_buffer.clear();
 
+    url_buffer_mutex.unlock();
     return 0; // success
 }
 

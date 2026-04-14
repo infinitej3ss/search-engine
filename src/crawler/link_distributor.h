@@ -9,7 +9,7 @@ enum URL_destination {
     remote_host
 };
 
-std::mutex url_buffer_mutex;
+inline std::mutex url_buffer_mutex;
 
 const int URL_BATCH_SIZE = 10000;
 

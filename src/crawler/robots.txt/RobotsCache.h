@@ -126,7 +126,7 @@ class RobotsCache {
     crawl_status request_permission_to_crawl(const string &url, float &timeLeftToCrawl) {
         string origin = url_to_origin(url);
         
-        lock_guard<mutex> lock(cacheMutex); // Lock for reading/writing the timestamp
+        lock_guard<mutex> lock(cacheMutex); // lock for reading/writing the timestamp
         
         auto it = cache.find(origin);
         if (it == cache.end() || it->second.status != FETCHED) {
@@ -139,7 +139,7 @@ class RobotsCache {
 
         int crawlDelay = 0;
         
-        // 1. Check if the URL itself is actually allowed
+        // check if the URL itself is actually allowed
         // The UrlAllowed function optionally reports the crawl delay back to us.
         bool allowed = it->second.robotsFile->UrlAllowed(
             (const Utf8*)USER_AGENT.c_str(), 
@@ -151,7 +151,7 @@ class RobotsCache {
             return do_not_crawl;
         }
 
-        // 2. Check if enough time has passed since the last crawl
+        // check if enough time has passed since the last crawl
         auto now = std::chrono::steady_clock::now();
         auto seconds_since_last_crawl = std::chrono::duration_cast<std::chrono::seconds>(now - it->second.last_crawled).count();
 
