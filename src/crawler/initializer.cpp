@@ -34,7 +34,7 @@ int initialize_peers(std::string &config_file){
         std::string ip = currentLine.substr(0, colon_pos);
         int port = std::stoi(currentLine.substr(colon_pos + 1));
 
-        Peer newPeer = {ip, port, -1, DISCONNECTED, {}};
+        Peer newPeer = {ip, port, {}};
         peers.push_back(newPeer);
     }
 
@@ -65,7 +65,8 @@ int8_t ingest_seedlist(const char* seedlist){
         }
         
         FrontierUrl newUrl = {0, currentLine};
-        if (get_URL_destination(currentLine) == frontier) {
+        int id;
+        if (get_URL_destination(currentLine, id) == frontier) {
             insert_seed_list(newUrl);
         }
     }
