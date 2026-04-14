@@ -36,7 +36,7 @@ int main() {
 
         fout << "https://" + row[2] << "/\n";
         i++;
-        if(i > 50000) {
+        if(i > 250000) {
             break;
         }
     }
