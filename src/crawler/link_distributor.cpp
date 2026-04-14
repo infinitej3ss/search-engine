@@ -6,21 +6,21 @@
 #include "get_ssl.h"
 #include "initializer.h"
 
-// maps a URL to a machine ID
-int URL_to_destination(const std::string &url) {
+// gets whether a URL is for the frontier or a remote machine, writes destinationID
+URL_destination get_URL_destination(std::string &url, int &destinationID){
+
     int numHosts = peers.size();
-    if (numHosts == 0) return -1;
+    if (numHosts == 0){
+        destinationID = -1;
+        return frontier;
+    }
 
     // Use C++ built-in string hashing
     std::hash<std::string> hasher;
     size_t hash_val = hasher(extract_authority(url));
+    destinationID = hash_val % numHosts;
 
-    return hash_val % numHosts;
-}
-
-// gets whether a URL is for the frontier or a remote machine
-URL_destination get_URL_destination(std::string &url){
-    // TODO: implement
+    if (destinationID != machineID) return remote_host;
 
     return frontier;
 }
