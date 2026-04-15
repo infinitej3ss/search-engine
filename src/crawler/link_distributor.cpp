@@ -59,8 +59,19 @@ int send_remote_peer_URL_vector(int remoteID) {
         url_buffer_mutex.unlock();
         return 0;
     }
-  
-    size_t dataSize = serialized_frontier_url_vector_size(peers[remoteID].url_send_buffer);
+
+    std::cout << "--- SENDING DATA TO " << remoteID << " -------\n";
+    std::vector<FrontierUrl> url_send_buffer = std::move(peers[remoteID].url_send_buffer);
+    peers[remoteID].url_send_buffer = std::vector<FrontierUrl>();
+
+    // define server address
+    struct sockaddr_in server_address;
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(peers[remoteID].port);
+    inet_pton(AF_INET, peers[remoteID].ip_address.c_str(), &server_address.sin_addr);
+    url_buffer_mutex.unlock();
+
+    size_t dataSize = serialized_frontier_url_vector_size(url_send_buffer);
 
     // allocate for the serialized data
     void* originalBuffer = malloc(dataSize);
@@ -70,16 +81,10 @@ int send_remote_peer_URL_vector(int remoteID) {
     void* movingPointer = originalBuffer;
 
     // serialize file data into buffer
-    serialize_frontier_url_vector(&movingPointer, peers[remoteID].url_send_buffer);
+    serialize_frontier_url_vector(&movingPointer, url_send_buffer);
 
     // create TCP socket for the sender
     int my_socket = socket(AF_INET, SOCK_STREAM, 0);
-
-    // define server address
-    struct sockaddr_in server_address;
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(peers[remoteID].port);
-    inet_pton(AF_INET, peers[remoteID].ip_address.c_str(), &server_address.sin_addr);
 
     // connect to server address
     int connectionStatus = connect(my_socket, (struct sockaddr*)&server_address, sizeof(server_address));
@@ -98,15 +103,14 @@ int send_remote_peer_URL_vector(int remoteID) {
     // recv for "OK"
     char ackBuffer[64];
     memset(ackBuffer, 0, sizeof(ackBuffer));
-    recv(my_socket, ackBuffer, sizeof(ackBuffer), 0);
+    ssize_t recv_status = recv(my_socket, ackBuffer, sizeof(ackBuffer), 0);
+    if(recv_status == -1) {
+        std::cout << "------recv failed-----\n";
+    }
 
     // clean up memory and socket
     free(originalBuffer);
     close(my_socket);
-
-    peers[remoteID].url_send_buffer.clear();
-
-    url_buffer_mutex.unlock();
     return 0; // success
 }
 
