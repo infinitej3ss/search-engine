@@ -6,6 +6,7 @@
 #include <string_view>
 #include <unordered_set>
 #include <vector>
+#include <cmath>
 
 struct ParsedUrl {
   std::string tld;
@@ -123,6 +124,8 @@ private:
         special_char_count++;
       }
     }
+
+    special_char_count = pow(special_char_count, 2);
 
     return static_cast<double>(special_char_count) / static_cast<double>(url.length());
   }

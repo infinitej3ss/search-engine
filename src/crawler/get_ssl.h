@@ -15,6 +15,7 @@ enum get_ssl_return {
     failure,
     blacklist,
     redirect,
+    again,
     success
 };
 

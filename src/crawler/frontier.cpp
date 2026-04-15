@@ -383,5 +383,13 @@ u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl>& v)
 
 void insert_seed_list(FrontierUrl& u) {
     SEEN.insert(u.url);
-    FRONTIER_QUEUES[0].data.push(u);
+    RankerInput rank_input;
+    rank_input.hop_distance = 0;
+    rank_input.url = u.url;
+    StaticRanker url_rank(rank_input);
+    u_int64_t rank = rank_bucket_from_double(url_rank.rank());
+    if (rank > NUM_FRONTIER_QUEUES) {
+        rank = NUM_FRONTIER_QUEUES - 1;
+    }
+    FRONTIER_QUEUES[rank].data.push(u);
 }

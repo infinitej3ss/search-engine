@@ -441,5 +441,5 @@ u_int64_t rank_bucket_from_double(const double score) {
     if(score <= 0) {
         return NUM_PAGE_FILE_RANKS - 1;
     }
-    return NUM_PAGE_FILE_RANKS - std::ceil(score * score * NUM_PAGE_FILE_RANKS); // score^2 to reduce clumping near 1
+    return NUM_PAGE_FILE_RANKS - std::ceil(score * NUM_PAGE_FILE_RANKS);
 }

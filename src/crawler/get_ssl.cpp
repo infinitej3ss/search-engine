@@ -28,7 +28,7 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page) {
     crawl_status crawlStatus;
     do {
         crawlStatus = robotsCache.request_permission_to_crawl(input_url, waitTime);
-        if (crawlStatus == wait_to_crawl) std::this_thread::sleep_for(std::chrono::duration<double>(waitTime));
+        if (crawlStatus == wait_to_crawl) std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double, std::ratio<1>>(waitTime)));
     } while (crawlStatus == wait_to_crawl);
 
     if (crawlStatus == do_not_crawl) return failure;
@@ -37,7 +37,10 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page) {
     int numRedirects = 0;
 
     std::string redirectUrl;
-    get_ssl_return getSslStatus = get_ssl(current_url, page, redirectUrl);
+    get_ssl_return getSslStatus;
+    do {
+        getSslStatus = get_ssl(current_url, page, redirectUrl);
+    } while (getSslStatus == again);
 
     if (getSslStatus == blacklist) return blacklist;
     if (getSslStatus == failure) return failure;
@@ -79,7 +82,7 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
     int status = getaddrinfo(url.Host, portToUse, &hints, &serverInfo);
 
     if (status != 0) {
-        if (status == -5 || status == -3) {
+        if (status == EAI_AGAIN) {
             pthread_mutex_lock(&dns_mutex);
             while(dns_wait) {
                 pthread_cond_wait(&dns_cv, &dns_mutex);
@@ -91,9 +94,12 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
             dns_wait = false;
             pthread_cond_signal(&dns_cv);
             pthread_mutex_unlock(&dns_mutex);
-        }
+            std::cerr << "Error: " << gai_strerror(status) << std::endl;
+            return again;
+        } else {
         std::cerr << "Error: " << gai_strerror(status) << std::endl;
         return failure;
+        }
     }
 
     // Create a TCP/IP socket.
