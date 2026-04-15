@@ -125,7 +125,8 @@ int insert_url(const FrontierUrl& input_url) {
     STAGING_VECTORS[rank].data.push_back(std::move(url));
 
     // if vector is full, write to disk and add to file queue
-    if (STAGING_VECTORS[rank].data.size() > NUM_URLS_PER_FILE) {
+    u_int64_t size = (rank == 0) ? NUM_URLS_PER_FILE / 10 : NUM_URLS_PER_FILE;
+    if (STAGING_VECTORS[rank].data.size() > size) {
         // write to disk
         std::string file_name = FRONTIER_DIR_PATH + "frontier_file_rank_" + std::to_string(rank) + "_num_" + std::to_string(STAGING_VECTORS[rank].num_written);
         STAGING_VECTORS[rank].num_written++;

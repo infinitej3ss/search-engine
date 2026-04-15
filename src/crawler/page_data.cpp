@@ -159,7 +159,8 @@ int write_page(u_int64_t rank_file, PageData& pd) {
     PAGE_FILES[rank_file].page_data_entries.push_back(serialized_data);
 
     // check if page file is now full
-    if (PAGE_FILES[rank_file].size_bytes > MAX_PAGE_FILE_SIZE_BYTES) {
+    u_int64_t size = (rank_file == 0) ? MAX_PAGE_FILE_SIZE_BYTES / 10 : MAX_PAGE_FILE_SIZE_BYTES;
+    if (PAGE_FILES[rank_file].size_bytes > size) {
         pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
         return 1;
     }
@@ -176,8 +177,9 @@ int write_page_file(u_int64_t rank_file, bool ignore_size) {
     }
 
     pthread_mutex_lock(&PAGE_FILES[rank_file].page_file_mutex);
-    
-    if (PAGE_FILES[rank_file].size_bytes <= MAX_PAGE_FILE_SIZE_BYTES && !ignore_size) {
+
+    u_int64_t size = (rank_file == 0) ? MAX_PAGE_FILE_SIZE_BYTES / 10 : MAX_PAGE_FILE_SIZE_BYTES;
+    if (PAGE_FILES[rank_file].size_bytes <= size && !ignore_size) {
         pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
         return 1;
     }

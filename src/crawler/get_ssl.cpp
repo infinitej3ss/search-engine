@@ -90,7 +90,7 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
             }
             dns_wait = true;
             pthread_mutex_unlock(&dns_mutex);
-            std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double, std::ratio<1>>(1)));  // avoid spamming
+            std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double, std::ratio<1>>(2)));  // avoid spamming
             pthread_mutex_lock(&dns_mutex);
             dns_wait = false;
             pthread_cond_signal(&dns_cv);
@@ -99,6 +99,9 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
             return again;
         } else {
         std::cerr << "Error: " << gai_strerror(status) << std::endl;
+        if(status == EAI_SYSTEM) {
+            cout << "System Error: " << strerror(status) << "\n";
+        }
         return failure;
         }
     }
