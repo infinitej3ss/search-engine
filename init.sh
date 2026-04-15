@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 
-# make directories
-mkdir crawler_test_files/page_data_dir crawler_test_files/frontier_dir crawler_test_files/bloom_filter_dir
+cd "$(dirname "$0")"
 
-# Navigate to crawler directory
-cd search-engine/src/crawler
+rm -rf crawler_test_files/*dir # remove any pre existing directories
 
-# 3. Call cmake
+mkdir -p crawler_test_files/page_data_dir crawler_test_files/frontier_dir crawler_test_files/bloom_filter_dir
+
 cmake --build build
 
-# 4. Navigate to build directory
-cd ../../build
-
-# 5. Launch crawler
-./crawler src/init.config crawler_test_files/seedlist.txt crawler_test_files/page_data_dir/ crawler_test_files/frontier_dir/ crawler_test_files/bloom_filter_dir/ 200 $1
+./build/crawler src/init.config crawler_test_files/seedlist.txt crawler_test_files/page_data_dir/ crawler_test_files/frontier_dir/ crawler_test_files/bloom_filter_dir/ 200 "$1"
