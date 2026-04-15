@@ -57,7 +57,7 @@ int send_remote_peer_URL_vector(int remoteID) {
         url_buffer_mutex.unlock();
         return 0;
     }
-
+  
     size_t dataSize = serialized_frontier_url_vector_size(peers[remoteID].url_send_buffer);
 
     // allocate for the serialized data
