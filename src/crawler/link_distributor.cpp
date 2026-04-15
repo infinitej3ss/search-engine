@@ -71,14 +71,15 @@ int send_remote_peer_URL_vector(int remoteID) {
     inet_pton(AF_INET, peers[remoteID].ip_address.c_str(), &server_address.sin_addr);
     url_buffer_mutex.unlock();
 
-    size_t dataSize = serialized_frontier_url_vector_size(url_send_buffer);
+    u_int64_t dataSize = serialized_frontier_url_vector_size(url_send_buffer);
 
     // allocate for the serialized data
-    void* originalBuffer = malloc(dataSize);
+    void* originalBuffer = malloc(dataSize + sizeof(u_int64_t));
     if (originalBuffer == nullptr) return -1; 
 
     // create a secondary pointer for the serialization function to move
-    void* movingPointer = originalBuffer;
+    void* movingPointer = (u_int8_t*)originalBuffer + sizeof(u_int64_t);
+    memcpy(originalBuffer, &dataSize, sizeof(u_int64_t));
 
     // serialize file data into buffer
     serialize_frontier_url_vector(&movingPointer, url_send_buffer);
@@ -95,7 +96,7 @@ int send_remote_peer_URL_vector(int remoteID) {
     }
 
     // send exact bytes to machine endpoint using the original pointer
-    send(my_socket, originalBuffer, dataSize, 0);
+    send(my_socket, originalBuffer, dataSize + sizeof(u_int64_t), 0);
 
     // signal that we are done writing to prevent TCP deadlock
     shutdown(my_socket, SHUT_WR);
@@ -139,16 +140,38 @@ void* start_distribution_server(void* arg) {
 
         std::vector<char> incomingData;
         char buffer[4096]; // declare buffer for reading in chunks
+        u_int64_t data_size;
+        int bytesReceived = recv(client_fd, buffer, sizeof(u_int64_t), MSG_WAITALL);
+        if(bytesReceived != sizeof(u_int64_t)) {
+            std::cerr << "client invalid packet\n";
+            close(client_fd);
+            continue;
+        }
+        memcpy(&data_size, buffer, sizeof(u_int64_t));
 
+        u_int64_t total_bytes = 0;
         // read in bytes on a loop
         while (true) {
             int bytesReceived = recv(client_fd, buffer, sizeof(buffer), 0);
             
-            if (bytesReceived > 0) {
+            if (bytesReceived > 0 && bytesReceived <= 4096) {
                 incomingData.insert(incomingData.end(), buffer, buffer + bytesReceived);
+                total_bytes += bytesReceived;
             } else {
                 break; // 0 means done (shutdown received), -1 means error
             }
+        }
+
+        if(total_bytes != incomingData.size()) {
+            std::cerr << "total bytes received and incomingData size mismatch\n";
+            close(client_fd);
+            continue;
+        }
+
+        if(total_bytes != data_size) {
+            std::cerr << "total bytes received and data_size mismatch\n";
+            close(client_fd);
+            continue;
         }
 
         std::cerr << incomingData.size() << " bytes recieved\n";

@@ -65,7 +65,8 @@ int8_t ingest_seedlist(const char* seedlist){
         }
         
         FrontierUrl newUrl = {0, currentLine};
-        if (get_URL_destination(currentLine, machineID) == frontier) {
+        int remote_id;
+        if (get_URL_destination(currentLine, remote_id) == frontier) {
             insert_seed_list(newUrl);
         }
     }
