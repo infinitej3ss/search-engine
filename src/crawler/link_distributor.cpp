@@ -10,6 +10,7 @@
 #include "get_ssl.h"
 #include "initializer.h"
 #include "frontier.h"
+#include <iostream>
 
 // gets whether a URL is for the frontier or a remote machine, writes remoteID
 URL_destination get_URL_destination(std::string &url, int &remoteID){
@@ -40,6 +41,7 @@ void send_URL_to_remote_peer(FrontierUrl &url, int remoteID){
     if (peers[remoteID].url_send_buffer.size() > URL_BATCH_SIZE) {
         url_buffer_mutex.unlock();
         send_remote_peer_URL_vector(remoteID);
+        std::cout << "------- URL batch send initiated " << remoteID << "-------\n";
         return;
     }
 
@@ -126,6 +128,9 @@ void* start_distribution_server(void* arg) {
 
         // get a new file descriptor
         int client_fd = accept(serverFD, nullptr, nullptr);
+
+        std::cout << "Client connection accepted!\n";
+
         if (client_fd < 0) continue;
 
         std::vector<char> incomingData;
@@ -142,6 +147,8 @@ void* start_distribution_server(void* arg) {
             }
         }
 
+        std::cout << incomingData.size() << " bytes recieved\n";
+
         if (!incomingData.empty()) {
             // point to the start of the received byte vector
             void* movingPointer = incomingData.data();
@@ -156,6 +163,8 @@ void* start_distribution_server(void* arg) {
         // send "OK"
         std::string ack = "OK";
         send(client_fd, ack.c_str(), ack.length(), 0);
+
+        cout << "Server ACK sent to client\n";
 
         // close TCP connection
         close(client_fd);
