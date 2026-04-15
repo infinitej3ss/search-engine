@@ -21,6 +21,7 @@ int main(int argc, char** argv) {
     if (initialize_peers(configFile) != 0) return 1;
 
     int should_ingest = atoi(argv[8]);
+    machineID = atoi(argv[7]);  // read in machineID
     // initialize frontier
     if (should_ingest) {
         if (ingest_seedlist(argv[2]) != 0) return 1;
@@ -30,8 +31,6 @@ int main(int argc, char** argv) {
     initialize_frontier_file_dir(std::string(argv[4]));
     initialize_bloom_filter_dir(std::string(argv[5]));
     load_frontier_filters();
-
-    machineID = atoi(argv[7]); // read in machineID
 
     // distribute links
     pthread_t server_thread;
