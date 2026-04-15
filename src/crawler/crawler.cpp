@@ -11,7 +11,7 @@
 #include "worker_thread.h"
 #include "link_distributor.h"
 
-// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count> <machine ID>
+// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count> <machine ID> <should skip seedlist>
 int main(int argc, char** argv) {
 
     signal(SIGPIPE, SIG_IGN); // don't crash on broken pipes
@@ -20,9 +20,11 @@ int main(int argc, char** argv) {
     std::string configFile = argv[1];
     if (initialize_peers(configFile) != 0) return 1;
 
+    int should_ingest = atoi(argv[8]);
     // initialize frontier
-    if (ingest_seedlist(argv[2]) != 0) return 1;
-
+    if (should_ingest) {
+        if (ingest_seedlist(argv[2]) != 0) return 1;
+    }
     // initialize directories
     initialize_page_file_dir(std::string(argv[3]));
     initialize_frontier_file_dir(std::string(argv[4]));
