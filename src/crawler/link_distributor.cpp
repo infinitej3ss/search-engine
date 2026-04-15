@@ -61,7 +61,7 @@ int send_remote_peer_URL_vector(int remoteID) {
     }
 
     std::cerr << "--- SENDING DATA TO " << remoteID << " -------\n";
-    std::vector<FrontierUrl> url_send_buffer = std::move(peers[remoteID].url_send_buffer);
+    std::vector<FrontierUrl> url_send_buffer = peers[remoteID].url_send_buffer;
     peers[remoteID].url_send_buffer = std::vector<FrontierUrl>();
 
     // define server address
