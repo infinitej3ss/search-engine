@@ -49,10 +49,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    for (auto& t : threads) {
-        pthread_detach(t);
-    }
-
     // await user input
     bool continue_running = true;
     u_int64_t num;
@@ -69,6 +65,14 @@ int main(int argc, char** argv) {
                 stop_crawling();
                 num = get_num_crawled_pages();
                 std::cout << "stopped crawling\n crawled " << std::to_string(num) << " pages\n";
+                for(auto &t : threads) {
+                    pthread_join(t, nullptr);
+                }
+                std::cout << "all thread stopped\n";
+                for(int i = 0; i < NUM_PAGE_FILE_RANKS; i++) {
+                    write_page_file(i);
+                }
+                std::cout << "all page files written\n";
                 break;
 
             case 'e':

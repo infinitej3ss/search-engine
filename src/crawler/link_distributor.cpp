@@ -41,7 +41,7 @@ void send_URL_to_remote_peer(FrontierUrl &url, int remoteID){
     if (peers[remoteID].url_send_buffer.size() > URL_BATCH_SIZE) {
         url_buffer_mutex.unlock();
         send_remote_peer_URL_vector(remoteID);
-        std::cout << "------- URL batch send initiated " << remoteID << "-------\n";
+        std::cerr << "------- URL batch send initiated " << remoteID << "-------\n";
         return;
     }
 
@@ -60,7 +60,7 @@ int send_remote_peer_URL_vector(int remoteID) {
         return 0;
     }
 
-    std::cout << "--- SENDING DATA TO " << remoteID << " -------\n";
+    std::cerr << "--- SENDING DATA TO " << remoteID << " -------\n";
     std::vector<FrontierUrl> url_send_buffer = std::move(peers[remoteID].url_send_buffer);
     peers[remoteID].url_send_buffer = std::vector<FrontierUrl>();
 
@@ -105,7 +105,7 @@ int send_remote_peer_URL_vector(int remoteID) {
     memset(ackBuffer, 0, sizeof(ackBuffer));
     ssize_t recv_status = recv(my_socket, ackBuffer, sizeof(ackBuffer), 0);
     if(recv_status == -1) {
-        std::cout << "------recv failed-----\n";
+        std::cerr << "------recv failed-----\n";
     }
 
     // clean up memory and socket
@@ -133,7 +133,7 @@ void* start_distribution_server(void* arg) {
         // get a new file descriptor
         int client_fd = accept(serverFD, nullptr, nullptr);
 
-        std::cout << "Client connection accepted!\n";
+        std::cerr << "Client connection accepted!\n";
 
         if (client_fd < 0) continue;
 
@@ -151,7 +151,7 @@ void* start_distribution_server(void* arg) {
             }
         }
 
-        std::cout << incomingData.size() << " bytes recieved\n";
+        std::cerr << incomingData.size() << " bytes recieved\n";
 
         if (!incomingData.empty()) {
             // point to the start of the received byte vector
@@ -168,7 +168,7 @@ void* start_distribution_server(void* arg) {
         std::string ack = "OK";
         send(client_fd, ack.c_str(), ack.length(), 0);
 
-        cout << "Server ACK sent to client\n";
+        cerr << "Server ACK sent to client\n";
 
         // close TCP connection
         close(client_fd);
