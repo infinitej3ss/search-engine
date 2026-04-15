@@ -11,7 +11,7 @@
 #include "worker_thread.h"
 #include "link_distributor.h"
 
-// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count> <machine ID> <should skip seedlist>
+// usage: ./crawler <config file> <seedlist> <page data dir> <frontier dir> <bloom filter dir> <worker thread count> <machine ID> <should load seedlist>
 int main(int argc, char** argv) {
 
     signal(SIGPIPE, SIG_IGN); // don't crash on broken pipes
