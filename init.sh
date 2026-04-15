@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 sudo apt get update
-sudo apt install -y build-essential 
+sudo apt install -y build-essential libssl-dev
 
 cd "$(dirname "$0")"
 
