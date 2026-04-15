@@ -3,6 +3,7 @@
 #include "robots.txt/RobotsTxt.h"
 #include "robots.txt/RobotsCache.h"
 #include "initializer.h"
+#include "worker_thread.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -29,7 +30,7 @@ get_ssl_return crawl_page(const std::string& input_url, std::string& page) {
     do {
         crawlStatus = robotsCache.request_permission_to_crawl(input_url, waitTime);
         if (crawlStatus == wait_to_crawl) std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double, std::ratio<1>>(waitTime)));
-    } while (crawlStatus == wait_to_crawl);
+    } while (crawlStatus == wait_to_crawl && should_continue_running());
 
     if (crawlStatus == do_not_crawl) return failure;
 

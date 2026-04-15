@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
                 }
                 std::cout << "all thread stopped\n";
                 for(int i = 0; i < NUM_PAGE_FILE_RANKS; i++) {
-                    write_page_file(i);
+                    write_page_file(i, true);
                 }
                 write_frontier_filters();
                 std::cout << "all page files written\n";

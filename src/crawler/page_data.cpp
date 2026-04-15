@@ -169,15 +169,15 @@ int write_page(u_int64_t rank_file, PageData& pd) {
 }
 
 // write specified page file to disk
-int write_page_file(u_int64_t rank_file) {
+int write_page_file(u_int64_t rank_file, bool ignore_size) {
     // check for valid rank_file
     if (rank_file >= NUM_PAGE_FILE_RANKS) {
         return -1;
     }
 
     pthread_mutex_lock(&PAGE_FILES[rank_file].page_file_mutex);
-
-    if (PAGE_FILES[rank_file].size_bytes <= MAX_PAGE_FILE_SIZE_BYTES) {
+    
+    if (PAGE_FILES[rank_file].size_bytes <= MAX_PAGE_FILE_SIZE_BYTES && !ignore_size) {
         pthread_mutex_unlock(&PAGE_FILES[rank_file].page_file_mutex);
         return 1;
     }

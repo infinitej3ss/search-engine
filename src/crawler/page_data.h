@@ -86,7 +86,7 @@ int write_page(u_int64_t rank_file, PageData& pd);
 //
 // Returns:
 //      0 on success, -1 on failure
-int write_page_file(u_int64_t rank_file);
+int write_page_file(u_int64_t rank_file, bool ignore_size = false);
 
 // writes a string to buffer and increments buffer past the end of the serialized string
 void serialize_string(void** buffer, const std::string& s);
