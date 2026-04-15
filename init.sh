@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+sudo apt get update
+sudo apt install -y build-essential 
+
 cd "$(dirname "$0")"
 
 rm -rf crawler_test_files/*dir # remove any pre existing directories
