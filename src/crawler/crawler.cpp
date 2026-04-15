@@ -72,6 +72,7 @@ int main(int argc, char** argv) {
                 for(int i = 0; i < NUM_PAGE_FILE_RANKS; i++) {
                     write_page_file(i);
                 }
+                write_frontier_filters();
                 std::cout << "all page files written\n";
                 break;
 
