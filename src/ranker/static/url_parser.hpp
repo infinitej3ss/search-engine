@@ -243,11 +243,13 @@ private:
     }
 
     // remove trailing '.' from host
-    if (host.back() == '.') {
-      host.remove_suffix(1);
+    if (!host.empty()) {
+        if (host.back() == '.') {
+            host.remove_suffix(1);
+        }
     }
 
-    // TODO might need more robust logic for edge cases
+      // TODO might need more robust logic for edge cases
   }
 
 public:
