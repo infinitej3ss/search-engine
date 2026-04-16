@@ -345,7 +345,13 @@ void *Talk( void *talkSocket )
 
     // unencode
     reqPath = UnencodeUrlEncoding(reqPath);
-    string fullPath = RootDirectory + reqPath;
+
+    // strip query string for file serving, but keep full path for plugins
+    string filePath = reqPath;
+    size_t qmark = filePath.find('?');
+    if (qmark != string::npos)
+        filePath = filePath.substr(0, qmark);
+    string fullPath = RootDirectory + filePath;
 
     // 3 & 4. Check for plugin and if it intercepts this path
     if (Plugin != nullptr && Plugin->MagicPath(reqPath)){
@@ -372,7 +378,7 @@ void *Talk( void *talkSocket )
                 close(openResult);
             } else {
                 // 7. If the path refers to a file, write it to the socket.
-                string mimeType = Mimetype(reqPath);
+                string mimeType = Mimetype(filePath);
                 string header = "HTTP/1.1 200 OK\r\nContent-Type: " + mimeType + "\r\nContent-Length: " + to_string(size) + "\r\nConnection: close\r\n\r\n";
                 
                 // Send the HTTP header first
