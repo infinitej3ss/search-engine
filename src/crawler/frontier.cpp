@@ -171,9 +171,7 @@ int insert_url(const FrontierUrl& input_url) {
 // insert vector of urls
 int insert_url_vector(std::vector<FrontierUrl>& url_vector) {
     for (auto& url : url_vector) {
-        if (insert_url(url) == -1) {
-            return -1;
-        }
+        insert_url(url);
     }
     return 0;
 }

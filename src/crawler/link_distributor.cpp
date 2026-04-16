@@ -34,42 +34,37 @@ URL_destination get_URL_destination(std::string &url, int &remoteID){
 void send_URL_to_remote_peer(FrontierUrl &url, int remoteID){
 
     // lock mutex
-    url_buffer_mutex.lock();
+    unique_lock<mutex> lock(url_buffer_mutex);
 
     peers[remoteID].url_send_buffer.push_back(url);
 
     if (peers[remoteID].url_send_buffer.size() > URL_BATCH_SIZE) {
-        url_buffer_mutex.unlock();
+        lock.unlock();
         send_remote_peer_URL_vector(remoteID);
         std::cerr << "------- URL batch send initiated " << remoteID << "-------\n";
         return;
     }
-
-    // unlock mutex
-    url_buffer_mutex.unlock();
 }
 
 // send a specified machine its list of links and clear it
 int send_remote_peer_URL_vector(int remoteID) {
-    
-    url_buffer_mutex.lock(); // request lock
+    unique_lock<mutex> lock(url_buffer_mutex);  // request lock
 
     // make sure vector hasn't been cleared while waiting for mutex
     if (peers[remoteID].url_send_buffer.size() <= URL_BATCH_SIZE) {
-        url_buffer_mutex.unlock();
         return 0;
     }
 
     std::cerr << "--- SENDING DATA TO " << remoteID << " -------\n";
-    std::vector<FrontierUrl> url_send_buffer = std::move(peers[remoteID].url_send_buffer);
-    peers[remoteID].url_send_buffer = std::vector<FrontierUrl>();
+    std::vector<FrontierUrl> url_send_buffer = peers[remoteID].url_send_buffer;
+    peers[remoteID].url_send_buffer.clear();
 
     // define server address
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
     server_address.sin_port = htons(peers[remoteID].port);
     inet_pton(AF_INET, peers[remoteID].ip_address.c_str(), &server_address.sin_addr);
-    url_buffer_mutex.unlock();
+    lock.unlock();
 
     u_int64_t dataSize = serialized_frontier_url_vector_size(url_send_buffer);
 
@@ -86,6 +81,13 @@ int send_remote_peer_URL_vector(int remoteID) {
 
     // create TCP socket for the sender
     int my_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    struct timeval timeout;
+    timeout.tv_sec = 30;
+    timeout.tv_usec = 0;
+
+    setsockopt(my_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+    setsockopt(my_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
 
     // connect to server address
     int connectionStatus = connect(my_socket, (struct sockaddr*)&server_address, sizeof(server_address));
@@ -133,6 +135,13 @@ void* start_distribution_server(void* arg) {
 
         // get a new file descriptor
         int client_fd = accept(serverFD, nullptr, nullptr);
+
+        struct timeval timeout;
+        timeout.tv_sec = 30;
+        timeout.tv_usec = 0;
+
+        setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+        setsockopt(client_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
 
         std::cerr << "Client connection accepted!\n";
 

@@ -96,12 +96,14 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
             pthread_cond_signal(&dns_cv);
             pthread_mutex_unlock(&dns_mutex);
             std::cerr << "Error: " << gai_strerror(status) << std::endl;
+            freeaddrinfo(serverInfo);
             return again;
         } else {
         std::cerr << "Error: " << gai_strerror(status) << std::endl;
         if(status == EAI_SYSTEM) {
             cout << "System Error: " << strerror(status) << "\n";
         }
+        freeaddrinfo(serverInfo);
         return failure;
         }
     }
