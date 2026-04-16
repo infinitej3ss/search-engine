@@ -143,11 +143,12 @@ class RobotsCache {
         }
 
         int crawlDelay = 0;
-
-        if (it->second.status != NON_EXISTENT) {
+        RobotsCacheEntry entry = it->second;
+        lock.unlock();
+        if (entry.status != NON_EXISTENT) {
             // check if the URL itself is actually allowed
             // The UrlAllowed function optionally reports the crawl delay back to us.
-            bool allowed = it->second.robotsFile->UrlAllowed(
+            bool allowed = entry.robotsFile->UrlAllowed(
                 (const Utf8*)USER_AGENT.c_str(),
                 (const Utf8*)url.c_str(),
                 &crawlDelay);
@@ -160,6 +161,8 @@ class RobotsCache {
             crawlDelay = 1;
         }
 
+        lock.lock();
+        it = cache.find(origin);
         // check if enough time has passed since the last crawl
         auto now = std::chrono::steady_clock::now();
         auto seconds_since_last_crawl = std::chrono::duration_cast<std::chrono::seconds>(now - it->second.last_crawled).count();
