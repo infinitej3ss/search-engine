@@ -1,14 +1,3 @@
-/*
-Files you'll need:
-For Ranker Team:
-├── simple_api.h          (API header -> #include this)
-├── libindex.dylib        (Compiled library)
-└── test_ranker           (Optional - example executable you can run)
-You can use the API by including simple_api.h and linking with libindex.dylib:
-
-Use this command to run: g++ --std=c++17 their_program.cpp -L. -lindex -pthread -o their_program
-
-*/
 // simple_api.h
 #pragma once
 
