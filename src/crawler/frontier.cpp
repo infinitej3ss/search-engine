@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <cstring>
 #include <queue>
 #include <random>
@@ -47,12 +48,20 @@ std::string SEEN_TAG = "frontier_seen";
 std::random_device rd;
 std::mt19937 gen(rd());
 std::geometric_distribution<> random_gen;
+std::chrono::steady_clock::time_point filters_written_at;
 
-pthread_mutex_t FRONTIER_IO_MUTEX = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_t FRONTIER_IO_MUTEX = PTHREAD_MUTEX_INITIALIZER;
 std::string FRONTIER_DIR_PATH = "./";
 
 void write_frontier_filters() {
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
+    auto now = std::chrono::steady_clock::now();
+    auto minutes_since_last_save = std::chrono::duration_cast<std::chrono::minutes>(now - filters_written_at).count();
+    if (minutes_since_last_save < 30) {
+        pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
+        return;
+    }
+    filters_written_at = now;
     BLACKLIST.write_data(BLACKLIST_TAG);
     SEEN.write_data(SEEN_TAG);
     pthread_mutex_unlock(&FRONTIER_IO_MUTEX);
@@ -60,6 +69,7 @@ void write_frontier_filters() {
 
 void load_frontier_filters() {
     pthread_mutex_lock(&FRONTIER_IO_MUTEX);
+    filters_written_at = std::chrono::steady_clock::now();
     BLACKLIST.load_data(BLACKLIST_TAG);
     SEEN.load_data(SEEN_TAG);
     pthread_mutex_unlock(&FRONTIER_IO_MUTEX);

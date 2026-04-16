@@ -91,6 +91,7 @@ class Bloomfilter {
 
             write(fd, buf, filterSize);
 
+            close(fd);
             delete[] buf;
             return 0;
         }
@@ -125,6 +126,7 @@ class Bloomfilter {
                 filter[i] = buf[i];
             }
 
+            close(fd);
             delete[] buf;
             return 0;
         }
