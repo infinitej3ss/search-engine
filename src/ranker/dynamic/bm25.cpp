@@ -1,6 +1,6 @@
 #include "bm25.hpp"
 
-double avg_length;
+#include <cmath>
 
 BM25::BM25(const std::vector<Text>& queries, const std::vector<Document>& docs) {
     calc_avg_length(docs);
@@ -49,7 +49,6 @@ size_t BM25::fqi(const std::string& tok, const Document& doc) const {
 
 double BM25::score(const Document& doc, const Text& query, const size_t& n_of_docs) const {
     double ans = 0.0;
-    size_t i = 0;
     for (const auto& it : query.tokens) {
         std::string tok = it.first;
         auto fqi_val = fqi(tok, doc);

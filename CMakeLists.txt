@@ -20,9 +20,13 @@ FetchContent_MakeAvailable(Catch2)
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 
+# ranker dynamic — non-header-only components (BM25 scorer, etc.)
+add_library(ranker_dynamic STATIC src/ranker/dynamic/bm25.cpp)
+target_include_directories(ranker_dynamic PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
 add_executable(tests ${TEST_SOURCES})
-target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(tests PRIVATE Catch2::Catch2WithMain ranker_dynamic)
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 enable_testing()
