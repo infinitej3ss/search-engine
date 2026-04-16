@@ -1,11 +1,10 @@
 #include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
+#include "query/query_compiler.hpp"
 #include "ranker/config/weights.hpp"
 #include "ranker/dynamic/dynamic_ranker.hpp"
 #include "ranker/static/static_ranker.hpp"
@@ -29,15 +28,6 @@ static const std::vector<DocCandidate> CORPUS = {
   {0, "https://stackoverflow.com/questions/tagged/python", {"newest","python","questions","stack","overflow"}, {"python","stackoverflow"}, 2, ""},
 };
 
-static std::vector<std::string> tokenize(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  std::vector<std::string> out;
-  std::istringstream iss(s);
-  for (std::string t; iss >> t;) out.push_back(t);
-  return out;
-}
-
 static double score(const std::vector<std::string>& q, const DocCandidate& d) {
   RankerInput in{d.url, true, 0, static_cast<size_t>(std::max(d.hop_distance, 0)), 0, 0.0};
   double s = StaticRanker(in).rank();
@@ -51,7 +41,7 @@ int main() {
 
   std::string line;
   while (std::cout << "> " && std::getline(std::cin, line)) {
-    auto q = tokenize(line);
+    auto q = query::compile(line);
     if (q.empty()) continue;
     load_and_apply_weights("weights.txt");
 
