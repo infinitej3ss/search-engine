@@ -8,28 +8,34 @@ int main() {
     cout << "=== Testing Index API ===" << endl;
     
     // Create index
+    cout << "Creating index..." << endl;
     IndexHandle idx = create_index();
+    cout << "Index created: " << idx << endl;
     
     // Build test index
     cout << "\nBuilding test index..." << endl;
     
-    // Use add_document directly (since build_index_from_crawler may need crawler files)
     const char* title1[] = {"cats", "feline"};
     const char* body1[] = {"cats", "are", "cute", "animals"};
-    add_document(idx, "https://example.com/cats", title1, 2, body1, 4, 0);
+    int doc1 = add_document(idx, "https://example.com/cats", title1, 2, body1, 4, 0);
+    cout << "  Added document 1, ID: " << doc1 << endl;
     
     const char* title2[] = {"dogs", "canine"};
     const char* body2[] = {"dogs", "are", "friendly", "pets"};
-    add_document(idx, "https://example.com/dogs", title2, 2, body2, 4, 1);
+    int doc2 = add_document(idx, "https://example.com/dogs", title2, 2, body2, 4, 1);
+    cout << "  Added document 2, ID: " << doc2 << endl;
     
     const char* title3[] = {"pets", "animals"};
     const char* body3[] = {"cats", "dogs", "are", "great", "pets"};
-    add_document(idx, "https://example.com/pets", title3, 2, body3, 5, 2);
+    int doc3 = add_document(idx, "https://example.com/pets", title3, 2, body3, 5, 2);
+    cout << "  Added document 3, ID: " << doc3 << endl;
     
+    cout << "Finalizing index..." << endl;
     finalize_index(idx);
     
     // Show document count
-    cout << "\nTotal documents: " << get_document_count(idx) << endl;
+    int docCount = get_document_count(idx);
+    cout << "\nTotal documents: " << docCount << endl;
     
     // Test single word queries
     cout << "\n=== Single Word Queries ===" << endl;
