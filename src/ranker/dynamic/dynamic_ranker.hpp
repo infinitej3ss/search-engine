@@ -6,7 +6,7 @@
 #include <cstddef>
 
 #include "span_finder.hpp"
-#include "../config/weights.hpp"
+#include "../../../config/weights.hpp"
 
 // minimal view of a document for dynamic ranking. mirrors the subset of
 // parser/crawler DocInfo the ranker actually consumes.

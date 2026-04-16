@@ -5,9 +5,9 @@
 #include <sstream>
 #include <string>
 
-#include "../static/static_ranker.hpp"
+#include "../src/ranker/static/static_ranker.hpp"
 
-// T2/T3 dynamic weight profile. One instance per query-intent class.
+// dynamic weight profile. one instance per query-intent class.
 // inline (not constexpr) so load_and_apply_weights can overwrite at runtime.
 struct WeightProfile {
   double w_metastream;  // T1
@@ -15,8 +15,9 @@ struct WeightProfile {
   double w_quality;     // T3
 };
 
-inline WeightProfile GENERAL      = {0.35, 0.45, 0.20};
-inline WeightProfile NAVIGATIONAL = {0.60, 0.15, 0.25};
+// defaults are zero — must load from config/weights.txt before ranking
+inline WeightProfile GENERAL      = {0.0, 0.0, 0.0};
+inline WeightProfile NAVIGATIONAL = {0.0, 0.0, 0.0};
 
 // Reads "key value" lines from `path` and assigns them to T1_WEIGHTS and the
 // profile globals. Blank and `#`-prefixed lines are skipped. Unknown keys and

@@ -91,11 +91,10 @@ constexpr std::array<T1SignalFn, T1_NUM_SIGNALS> T1_SIGNALS = {
   blacklist_rank,
 };
 
-// weights — tune via eval (tests/test_static_eval.cpp)
+// weights — loaded from config/weights.txt at runtime
 // order: tld, url_len, path_depth, subdomain_depth, ip_in_url, special_char_density, blacklist
-// TODO refactor into config
 inline std::array<double, T1_NUM_SIGNALS> T1_WEIGHTS = {
-  3.0, 1.0, 1.0, 0.5, 1.0, 2.0, 1.0
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 
 inline double t1_rank(const ParsedUrl& url) {
