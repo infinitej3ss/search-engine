@@ -462,7 +462,7 @@ int main( int argc, char **argv )
    // where we'd like to listen for connections.
 
 
-   if(bind(listenSocket, (sockaddr*)&listenAddress, sizeof(listenAddress))) {
+   if(::bind(listenSocket, (sockaddr*)&listenAddress, sizeof(listenAddress))) {
       cerr << "failed listen bind\n";
       return 1;
    }
