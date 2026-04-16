@@ -101,7 +101,7 @@ get_ssl_return get_ssl(const std::string& input_url, std::string& page, std::str
         } else {
         std::cerr << "Error: " << gai_strerror(status) << std::endl;
         if(status == EAI_SYSTEM) {
-            cout << "System Error: " << strerror(status) << "\n";
+            cout << "System Error: " << strerror(errno) << "\n";
         }
         freeaddrinfo(serverInfo);
         return failure;
