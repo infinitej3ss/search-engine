@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <sstream>
 #include <cstring>
+#include <iostream>
 
 #include "../src/ranker/static/static_ranker.hpp"
 #include "../src/ranker/dynamic/dynamic_ranker.hpp"
@@ -149,6 +150,7 @@ private:
         }
 
         finalize_index(index);
+        std::cerr << "[search plugin] loaded " << get_document_count(index) << " documents" << std::endl;
     }
 
     std::string build_json_response(const std::string& query,
@@ -187,8 +189,8 @@ public:
     }
 
     bool MagicPath(const std::string path) override {
-        // claim any path starting with /search
-        return path.find("/search") == 0;
+        // only intercept /search or /search?...
+        return path == "/search" || path.find("/search?") == 0;
     }
 
     std::string ProcessRequest(std::string request) override {
@@ -208,6 +210,8 @@ public:
             int result_count = 0;
             int* doc_ids = find_and_query(index, c_terms.data(),
                 static_cast<int>(c_terms.size()), &result_count);
+            std::cerr << "[search] query=\"" << query_str << "\" terms=" << c_terms.size()
+                      << " results=" << result_count << std::endl;
 
             for (int i = 0; i < result_count; i++) {
                 int doc_id = doc_ids[i];

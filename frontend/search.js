@@ -17,6 +17,7 @@ if (query) {
         .catch(err => { resultsDiv.textContent = "error: " + err.message; });
 }
 
+// TODO turn these into cards with snippets and doc info
 function render(data) {
     resultsDiv.innerHTML = "";
 

@@ -1,5 +1,5 @@
 // test_ranker.cpp
-#include "simple_api.h"
+#include "index/simple_api.h"
 #include <iostream>
 
 using namespace std;
