@@ -1,5 +1,14 @@
 eval/.venv/
 
 build/
-.cache
+.cache/
+.vscode/
 .DS_Store
+
+# generated index blobs — produced by build_index
+*.blob
+
+# compiled binaries from the old raw-g++ test workflow
+src/test_constraint_solver
+src/test_minimal
+src/test_real_data
