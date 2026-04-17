@@ -14,7 +14,7 @@ int main() {
         int rank_docs = 0;
 
         while (true) {
-            std::string filename = "crawled_page_rank_" + std::to_string(rank) +
+            std::string filename = "crawled_page_data_rank_" + std::to_string(rank) +
                                    "_num_" + std::to_string(fileNum);
             if (load_page_file(filename) != 0) break;
 
