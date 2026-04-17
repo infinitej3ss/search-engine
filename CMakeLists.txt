@@ -55,16 +55,16 @@ target_include_directories(search_server PRIVATE
 )
 target_link_libraries(search_server PRIVATE index_core)
 
-# shard server: disabled until ShardPlugin is updated to use real Index class
-# add_executable(shard_server
-#   server/LinuxTinyServer.cpp
-#   server/ShardPlugin.cpp
-# )
-# target_include_directories(shard_server PRIVATE
-#   ${CMAKE_SOURCE_DIR}/src
-#   ${CMAKE_SOURCE_DIR}
-# )
-# target_link_libraries(shard_server PRIVATE index_core)
+# shard server: one runs per shard machine. configured via SHARD_DATA_DIR env var
+add_executable(shard_server
+  server/LinuxTinyServer.cpp
+  server/ShardPlugin.cpp
+)
+target_include_directories(shard_server PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(shard_server PRIVATE index_core)
 
 # ---- tests ---------------------------------------------------------------
 

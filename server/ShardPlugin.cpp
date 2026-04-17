@@ -1,33 +1,28 @@
-// shard-side plugin for linuxtinyserver
-// handles /query?q=...&timeout_ms=... requests from the leader.
-// works through index levels autonomously, streaming results as
-// newline-delimited json. stops when it has enough good results
-// or the timeout expires.
+// shard-side plugin for linuxtinyserver.
+// handles /query?q=... requests by running search over this shard's data
+// and streaming results back to the leader as newline-delimited json.
+//
+// iterates level-by-level (highest quality rank first). between levels,
+// flushes results to the leader. stops early if:
+//   - leader closes the socket (send returns error)
+//   - shard has emitted enough good-quality results
+//   - all levels exhausted
+//
+// configuration: SHARD_DATA_DIR env var points at this shard's blob dir.
+// shard.good_threshold, shard.good_count, shard.max_results in weights.txt
+// control early-termination behavior.
 
 #include "Plugin.h"
-#include "../index/simple_api.h"
 
 #include <string>
-#include <vector>
 #include <sstream>
-#include <chrono>
 #include <iostream>
 #include <cstdlib>
+#include <sys/socket.h>
 
-#include "../config/weights.hpp"
-#include "../src/ranker/static/static_ranker.hpp"
-#include "../src/ranker/dynamic/dynamic_ranker.hpp"
-#include "../src/engine/search_result.hpp"
+#include "../src/engine/search_engine.hpp"
 
-// how many results above this score threshold before we stop early
-static constexpr double GOOD_ENOUGH_THRESHOLD = 0.3;
-static constexpr int GOOD_ENOUGH_COUNT = 10;
-
-// placeholder for when the index supports multiple levels.
-// right now there's only one level (the whole index).
-static constexpr int NUM_LEVELS = 1;
-
-// http helpers (same as SearchPlugin)
+// http helpers
 
 static std::string get_query_param(const std::string& path, const std::string& key) {
     size_t qmark = path.find('?');
@@ -58,16 +53,6 @@ static std::string get_query_param(const std::string& path, const std::string& k
     return "";
 }
 
-static std::vector<std::string> split_terms(const std::string& query) {
-    std::vector<std::string> terms;
-    std::istringstream stream(query);
-    std::string word;
-    while (stream >> word) {
-        terms.push_back(word);
-    }
-    return terms;
-}
-
 static std::string json_escape(const std::string& s) {
     std::string out;
     for (char c : s) {
@@ -83,146 +68,114 @@ static std::string json_escape(const std::string& s) {
     return out;
 }
 
+static std::string result_to_line(const SearchResult& r) {
+    std::ostringstream json;
+    json << "{\"doc_id\":" << r.doc_id
+         << ",\"url\":\"" << json_escape(r.url) << "\""
+         << ",\"title\":\"" << json_escape(r.title) << "\""
+         << ",\"snippet\":\"" << json_escape(r.snippet) << "\""
+         << ",\"static_score\":" << r.static_score
+         << ",\"dynamic_score\":" << r.dynamic_score
+         << ",\"combined_score\":" << r.combined_score
+         << "}\n";
+    return json.str();
+}
+
+// write all bytes or fail. uses MSG_NOSIGNAL so a closed peer gives us
+// EPIPE instead of SIGPIPE killing the process.
+// https://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
+static bool write_all(int fd, const std::string& data) {
+    size_t sent = 0;
+    while (sent < data.size()) {
+        ssize_t n = send(fd, data.data() + sent, data.size() - sent, MSG_NOSIGNAL);
+        if (n <= 0) return false;
+        sent += static_cast<size_t>(n);
+    }
+    return true;
+}
+
 // the shard plugin
 
 class ShardPlugin : public PluginObject {
 private:
-    IndexHandle index;
-    std::string weights_path;
+    SearchEngine engine;
 
-    double compute_static_score(const char* url) {
-        if (!url) return 0.0;
-
-        RankerInput rinput;
-        rinput.url = url;
-        rinput.is_https = (std::string(url).find("https://") == 0);
-        rinput.pages_per_domain = 0;
-        rinput.hop_distance = 0;
-        rinput.word_count = 0;
-        rinput.content_to_html_ratio = 0.0;
-
-        StaticRanker ranker(rinput);
-        double s = ranker.rank();
-        return s < 0.0 ? 0.0 : s;
-    }
-
-    double compute_dynamic_score(const std::vector<std::string>& terms,
-                                  int doc_id, const char* url) {
-        DocCandidate candidate;
-        candidate.doc_id = static_cast<uint32_t>(doc_id);
-        candidate.url = url ? url : "";
-        candidate.hop_distance = -1;
-
-        return score_dynamic(terms, candidate, GENERAL);
-    }
-
-    // format one result as a json line
-    std::string result_to_json(const SearchResult& r) {
-        std::ostringstream json;
-        json << "{\"doc_id\":" << r.doc_id
-             << ",\"url\":\"" << json_escape(r.url) << "\""
-             << ",\"static_score\":" << r.static_score
-             << ",\"dynamic_score\":" << r.dynamic_score
-             << ",\"combined_score\":" << r.combined_score
-             << "}";
-        return json.str();
-    }
-
-    // query one level of the index. currently just queries the whole
-    // index since the api doesn't support levels yet. when it does,
-    // this will take a level parameter and call the appropriate api.
-    std::vector<SearchResult> query_level(
-            const std::vector<std::string>& terms, int /* level */) {
-        std::vector<SearchResult> results;
-
-        std::vector<const char*> c_terms;
-        for (const auto& t : terms) {
-            c_terms.push_back(t.c_str());
-        }
-
-        int result_count = 0;
-        int* doc_ids = find_and_query(index, c_terms.data(),
-            static_cast<int>(c_terms.size()), &result_count);
-
-        for (int i = 0; i < result_count; i++) {
-            int doc_id = doc_ids[i];
-            const char* url = get_document_url(index, doc_id);
-
-            double ss = compute_static_score(url);
-            double ds = compute_dynamic_score(terms, doc_id, url);
-            double combined = ss * ds;
-
-            results.push_back({doc_id, url ? url : "", "", "", ss, ds, combined});
-        }
-
-        free_results(doc_ids);
-        return results;
+    static std::string data_dir_from_env() {
+        const char* dir = std::getenv("SHARD_DATA_DIR");
+        return dir ? std::string(dir) : std::string("data");
     }
 
 public:
-    ShardPlugin() : weights_path("config/weights.txt") {
-        index = create_index();
-
-        if (!load_and_apply_weights(weights_path)) {
-            std::cerr << "[shard] warning: could not load " << weights_path
-                      << std::endl;
-        }
-
-        // in production, call build_index_from_crawler(index) here
-        // to load this shard's portion of the crawled data
-        finalize_index(index);
-
-        std::cerr << "[shard] ready, " << get_document_count(index)
-                  << " documents" << std::endl;
-
+    ShardPlugin()
+        : engine("config/weights.txt", data_dir_from_env()) {
         Plugin = this;
-    }
-
-    ~ShardPlugin() override {
-        destroy_index(index);
     }
 
     bool MagicPath(const std::string path) override {
         return path == "/query" || path.find("/query?") == 0;
     }
 
-    std::string ProcessRequest(std::string request) override {
+    bool StreamingResponse(const std::string path) override {
+        return MagicPath(path);
+    }
+
+    std::string ProcessRequest(std::string /*request*/) override {
+        return "";
+    }
+
+    void ProcessStreamingRequest(std::string request, int talkFD) override {
         std::string query_str = get_query_param(request, "q");
-        std::string timeout_str = get_query_param(request, "timeout_ms");
-        int timeout_ms = timeout_str.empty() ? 400 : std::stoi(timeout_str);
 
-        std::vector<std::string> terms = split_terms(query_str);
+        std::string header = "HTTP/1.1 200 OK\r\n"
+                             "Content-Type: application/x-ndjson\r\n"
+                             "Connection: close\r\n\r\n";
+        if (!write_all(talkFD, header)) return;
 
-        load_and_apply_weights(weights_path);
+        auto terms = query::compile(query_str);
+        if (terms.empty()) {
+            std::cerr << "[shard] empty query after compile" << std::endl;
+            return;
+        }
 
-        auto start = std::chrono::steady_clock::now();
-        auto deadline = start + std::chrono::milliseconds(timeout_ms);
+        int total_sent = 0;
+        int good_sent = 0;
 
-        std::ostringstream body;
-        int good_count = 0;
+        // iterate levels from highest quality (0) to lowest.
+        // after each level, check whether we've hit the good-results threshold.
+        // if the leader disconnected mid-stream, bail immediately.
+        for (size_t level = 0; level < engine.num_levels(); level++) {
+            auto level_results = engine.search_level(terms, level);
 
-        // work through levels until we have enough results or time runs out
-        for (int level = 0; level < NUM_LEVELS; level++) {
-            if (std::chrono::steady_clock::now() >= deadline) break;
-
-            auto level_results = query_level(terms, level);
-
+            int level_sent = 0;
             for (const auto& r : level_results) {
-                body << result_to_json(r) << "\n";
-                if (r.combined_score >= GOOD_ENOUGH_THRESHOLD) {
-                    good_count++;
+                if (level_sent >= SHARD_MAX_RESULTS) break;
+
+                if (!write_all(talkFD, result_to_line(r))) {
+                    std::cerr << "[shard] leader disconnected mid-level "
+                              << level << " after " << total_sent
+                              << " total results" << std::endl;
+                    return;
+                }
+                total_sent++;
+                level_sent++;
+                if (r.combined_score >= SHARD_GOOD_THRESHOLD) {
+                    good_sent++;
                 }
             }
 
-            std::cerr << "[shard] level " << level << ": "
-                      << level_results.size() << " results, "
-                      << good_count << " above threshold" << std::endl;
+            std::cerr << "[shard] level " << level << ": emitted "
+                      << level_sent << " results (" << good_sent
+                      << " good total)" << std::endl;
 
-            // stop early if we have enough good results
-            if (good_count >= GOOD_ENOUGH_COUNT) break;
+            if (good_sent >= SHARD_GOOD_COUNT) {
+                std::cerr << "[shard] good threshold reached after level "
+                          << level << ", skipping lower levels" << std::endl;
+                break;
+            }
         }
 
-        return body.str();
+        std::cerr << "[shard] done: " << total_sent << " results for \""
+                  << query_str << "\"" << std::endl;
     }
 };
 

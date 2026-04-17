@@ -1,17 +1,26 @@
 #pragma once
 
-// distributes a query to all index shards in parallel, collects results,
-// and merge-sorts by combined_score.
+// distributes a query to all index shards in parallel. shards stream
+// results back as ndjson; this class collates them and triggers an early
+// close once it has enough good-quality hits.
+//
+// exit paths:
+//   1. enough good results collected (count_over_threshold >= needed)
+//   2. global timeout_ms elapsed
+//   3. every shard stream finished (all shards exhausted their results)
 
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <atomic>
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <condition_variable>
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 #include "shard_client.hpp"
 #include "search_result.hpp"
@@ -22,29 +31,49 @@ private:
     int global_timeout_ms;
     int shard_timeout_ms;
     int results_needed;
+    double good_threshold;
 
-    // per-shard query function, called from its own thread.
-    // appends results to shared vector under mutex.
-    static void query_shard(ShardClient* client,
-                            const std::string& query_str,
-                            int timeout_ms,
-                            std::vector<SearchResult>* all_results,
-                            std::mutex* mtx) {
-        auto results = client->query(query_str, timeout_ms);
+    // per-shard worker runs in its own thread.
+    // streams results into the shared accumulator, honoring the stop flag.
+    static void worker(ShardClient* client,
+                       const std::string& query,
+                       int shard_timeout_ms,
+                       double threshold,
+                       std::vector<SearchResult>* out,
+                       std::mutex* mtx,
+                       std::atomic<int>* good_count,
+                       std::atomic<bool>* stop_flag) {
+        auto callback = [&](const SearchResult& r) -> bool {
+            if (stop_flag->load()) return false;
 
-        std::lock_guard<std::mutex> lock(*mtx);
-        all_results->insert(all_results->end(), results.begin(), results.end());
+            {
+                std::lock_guard<std::mutex> lock(*mtx);
+                out->push_back(r);
+            }
+
+            if (r.combined_score >= threshold) {
+                good_count->fetch_add(1);
+            }
+            return !stop_flag->load();
+        };
+
+        client->stream_query(query, shard_timeout_ms, callback);
     }
 
 public:
-    // config file format (one shard per line):
-    //   host:port
-    //   # comments and blank lines are ignored
-    //   timeout_ms 1000
-    //   shard_timeout_ms 400
-    //   results_needed 10
+    // config file format:
+    //   timeout_ms <int>
+    //   shard_timeout_ms <int>
+    //   results_needed <int>
+    //   good_threshold <double>   (optional, default 0.3)
+    //   <host>:<port>
+    //   ...
+    // blank lines and # comments are ignored.
     QueryDistributor(const std::string& config_path)
-        : global_timeout_ms(1000), shard_timeout_ms(600), results_needed(10) {
+        : global_timeout_ms(5000),
+          shard_timeout_ms(4000),
+          results_needed(20),
+          good_threshold(0.3) {
 
         std::ifstream in(config_path);
         if (!in.is_open()) {
@@ -61,13 +90,14 @@ public:
             std::string token;
             iss >> token;
 
-            // config directives
             if (token == "timeout_ms") {
                 iss >> global_timeout_ms;
             } else if (token == "shard_timeout_ms") {
                 iss >> shard_timeout_ms;
             } else if (token == "results_needed") {
                 iss >> results_needed;
+            } else if (token == "good_threshold") {
+                iss >> good_threshold;
             } else {
                 // host:port
                 size_t colon = token.find(':');
@@ -81,46 +111,63 @@ public:
 
         std::cerr << "[distributor] " << shards.size() << " shards, "
                   << "global timeout " << global_timeout_ms << "ms, "
-                  << "shard timeout " << shard_timeout_ms << "ms"
-                  << std::endl;
+                  << "shard timeout " << shard_timeout_ms << "ms, "
+                  << "need " << results_needed << " good results (score >= "
+                  << good_threshold << ")" << std::endl;
     }
 
     bool has_shards() const { return !shards.empty(); }
 
-    // fan out query to all shards, collect results, merge-sort by score.
     std::vector<SearchResult> search(const std::string& query_str) {
         std::vector<SearchResult> all_results;
         std::mutex mtx;
+        std::atomic<int> good_count(0);
+        std::atomic<bool> stop_flag(false);
 
-        // launch one thread per shard
+        // launch one worker per shard
         std::vector<std::thread> threads;
+        threads.reserve(shards.size());
         for (auto& shard : shards) {
-            threads.emplace_back(query_shard, &shard, query_str,
-                                 shard_timeout_ms, &all_results, &mtx);
+            threads.emplace_back(worker,
+                &shard, std::cref(query_str),
+                shard_timeout_ms, good_threshold,
+                &all_results, &mtx, &good_count, &stop_flag);
         }
 
-        // wait up to global timeout for threads to finish
+        // watcher: signal stop when we have enough good results OR
+        // when the global deadline passes. polls every few ms.
         auto deadline = std::chrono::steady_clock::now()
                       + std::chrono::milliseconds(global_timeout_ms);
 
-        for (auto& t : threads) {
-            auto remaining = deadline - std::chrono::steady_clock::now();
-            if (remaining.count() > 0) {
-                // can't do timed join with std::thread — just join and let
-                // the shard's own timeout handle the cutoff.
-                // the global timeout is enforced by giving shards a shorter
-                // timeout than the leader's.
-                t.join();
-            } else {
-                // past deadline, but we still need to join (threads will
-                // finish soon since their timeout is shorter)
-                t.join();
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (good_count.load() >= results_needed) {
+                stop_flag.store(true);
+                break;
             }
+
+            // also exit early if all threads have finished
+            bool any_alive = false;
+            for (auto& t : threads) {
+                if (t.joinable()) {
+                    // joinable just means not yet joined — can't check liveness
+                    // without joining. use a short sleep instead.
+                    any_alive = true;
+                    break;
+                }
+            }
+            if (!any_alive) break;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
+        // deadline reached (or early stop signaled). tell workers to stop.
+        stop_flag.store(true);
+
+        for (auto& t : threads) t.join();
+
         std::cerr << "[distributor] collected " << all_results.size()
-                  << " results from " << shards.size() << " shards"
-                  << std::endl;
+                  << " results (" << good_count.load() << " good) from "
+                  << shards.size() << " shards" << std::endl;
 
         // merge-sort by combined score, descending
         std::sort(all_results.begin(), all_results.end(),
@@ -128,11 +175,19 @@ public:
                 return a.combined_score > b.combined_score;
             });
 
-        // trim to requested count
-        if (all_results.size() > static_cast<size_t>(results_needed)) {
-            all_results.resize(results_needed);
+        // dedup by url — keep highest-scoring version
+        std::unordered_set<std::string> seen;
+        std::vector<SearchResult> deduped;
+        deduped.reserve(all_results.size());
+        for (auto& r : all_results) {
+            if (seen.insert(r.url).second) {
+                deduped.push_back(std::move(r));
+            }
         }
 
-        return all_results;
+        if (deduped.size() > static_cast<size_t>(results_needed)) {
+            deduped.resize(results_needed);
+        }
+        return deduped;
     }
 };

@@ -43,6 +43,11 @@ inline int    TITLE_MAX_REPEAT = 3;
 inline double NON_LATIN_PENALTY_SCALE = 2.0;  // multiplied by non-latin ratio
 inline double NON_LATIN_FLOOR = 0.2;          // minimum penalty (max suppression)
 
+// shard-side tuning (only used when running as a shard)
+inline double SHARD_GOOD_THRESHOLD = 0.3;   // per-result score to count as "good"
+inline int    SHARD_GOOD_COUNT = 30;        // good results before early-stop
+inline int    SHARD_MAX_RESULTS = 100;      // per-level cap on emitted results
+
 // Reads "key value" lines from `path` and assigns them to T1_WEIGHTS and the
 // profile globals. Blank and `#`-prefixed lines are skipped. Unknown keys and
 // parse errors warn on stderr but don't throw — a typo shouldn't kill the
@@ -93,6 +98,10 @@ inline bool load_and_apply_weights(const std::string& path) {
     else if (key == "penalty.title_max_repeat")        TITLE_MAX_REPEAT          = static_cast<int>(value);
     else if (key == "penalty.non_latin_scale")         NON_LATIN_PENALTY_SCALE   = value;
     else if (key == "penalty.non_latin_floor")         NON_LATIN_FLOOR           = value;
+
+    else if (key == "shard.good_threshold")            SHARD_GOOD_THRESHOLD      = value;
+    else if (key == "shard.good_count")                SHARD_GOOD_COUNT          = static_cast<int>(value);
+    else if (key == "shard.max_results")               SHARD_MAX_RESULTS         = static_cast<int>(value);
 
     else std::cerr << "[weights] unknown key: " << key << "\n";
   }

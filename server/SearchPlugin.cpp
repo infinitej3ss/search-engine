@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <cstdlib>
 
 #include "../src/engine/search_engine.hpp"
 
@@ -91,12 +92,25 @@ static std::string results_to_json(const std::string& query,
 
 // the plugin
 
+// if LEADER_SHARDS_CONFIG env var is set, run in distributed mode.
+// otherwise, run in local mode and serve from LEADER_DATA_DIR (default "data").
+static SearchEngine make_engine() {
+    const char* shards = std::getenv("LEADER_SHARDS_CONFIG");
+    const char* data_dir = std::getenv("LEADER_DATA_DIR");
+    std::string dd = data_dir ? data_dir : "data";
+
+    if (shards) {
+        return SearchEngine("config/weights.txt", dd, shards);
+    }
+    return SearchEngine("config/weights.txt", dd);
+}
+
 class SearchPlugin : public PluginObject {
 private:
     SearchEngine engine;
 
 public:
-    SearchPlugin() : engine("config/weights.txt", "data") {
+    SearchPlugin() : engine(make_engine()) {
         Plugin = this;
     }
 

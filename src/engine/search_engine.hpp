@@ -243,79 +243,93 @@ private:
         indexes.push_back(std::move(idx));
     }
 
-    // cascading search across rank buckets
+public:
+    // search a single rank/level. returns results sorted by combined score desc.
+    // bm25 stats (idf, avg doc length) are local to this level — there's no
+    // global corpus normalization across ranks, which is fine because the
+    // per-level pools are disjoint anyway.
+    std::vector<SearchResult> search_level(const std::vector<std::string>& terms,
+                                            size_t level) {
+        std::vector<SearchResult> results;
+        if (level >= indexes.size()) return results;
+
+        ConstraintSolver solver(indexes[level].get());
+        auto doc_ids = solver.FindAndQuery(terms);
+
+        int n_docs = indexes[level]->GetDocumentCount();
+        double avg_len = (level < avg_doc_lengths.size()) ? avg_doc_lengths[level] : 500.0;
+        if (avg_len <= 0.0) avg_len = 500.0;
+        BM25 bm25(n_docs, avg_len);
+
+        std::unordered_map<std::string, int> doc_freq;
+        for (const auto& term : terms) {
+            doc_freq[term] = indexes[level]->GetDocumentFrequency(term);
+        }
+
+        struct Candidate {
+            int doc_id;
+            Index::DocumentMetadata meta;
+            DocCandidate cand;
+            double bm25_raw;
+        };
+        std::vector<Candidate> candidates;
+
+        for (int doc_id : doc_ids) {
+            auto meta = indexes[level]->GetDocumentMetadata(doc_id);
+            DocCandidate cand = to_candidate(meta);
+            double bm25_raw = bm25.score(cand.body_words, terms, doc_freq);
+            candidates.push_back({doc_id, std::move(meta), std::move(cand), bm25_raw});
+        }
+
+        // sigmoid normalization centered on median
+        double median_bm25 = 0.0;
+        if (!candidates.empty()) {
+            std::vector<double> bm25_vals;
+            bm25_vals.reserve(candidates.size());
+            for (const auto& c : candidates) bm25_vals.push_back(c.bm25_raw);
+            std::sort(bm25_vals.begin(), bm25_vals.end());
+            median_bm25 = bm25_vals[bm25_vals.size() / 2];
+        }
+
+        for (auto& c : candidates) {
+            double bm25_norm = 1.0 / (1.0 + std::exp(-SIGMOID_K * (c.bm25_raw - median_bm25)));
+            double s = compute_score(terms, c.cand, bm25_norm);
+            if (s <= 0.0) continue;
+
+            RankerInput in;
+            in.url = c.cand.url;
+            in.is_https = (c.cand.url.find("https://") == 0);
+            in.pages_per_domain = 0;
+            in.hop_distance = static_cast<size_t>(std::max(c.cand.hop_distance, 0));
+            in.word_count = 0;
+            in.content_to_html_ratio = 0.0;
+            double ss = StaticRanker(in).rank();
+            double ds = score_dynamic(terms, c.cand, GENERAL, bm25_norm);
+
+            std::string title = join_title(c.meta.title_words);
+            std::string snippet = make_snippet(terms, c.cand.body_words);
+
+            results.push_back({c.doc_id, c.meta.url, title, snippet, ss, ds, s});
+        }
+
+        std::sort(results.begin(), results.end(),
+            [](const SearchResult& a, const SearchResult& b) {
+                return a.combined_score > b.combined_score;
+            });
+
+        return results;
+    }
+
+    size_t num_levels() const { return indexes.size(); }
+
+private:
+    // local (non-distributed) search across all levels
     std::vector<SearchResult> search_local(const std::vector<std::string>& terms) {
         std::vector<SearchResult> results;
 
         for (size_t r = 0; r < indexes.size(); r++) {
-            ConstraintSolver solver(indexes[r].get());
-            auto doc_ids = solver.FindAndQuery(terms);
-
-            // compute average doc length for bm25 normalization
-            int n_docs = indexes[r]->GetDocumentCount();
-            double avg_len = 0.0;
-            if (!avg_doc_lengths.empty() && r < avg_doc_lengths.size()) {
-                avg_len = avg_doc_lengths[r];
-            }
-            BM25 bm25(n_docs, avg_len > 0.0 ? avg_len : 500.0);
-
-            // build doc frequency map for query terms
-            std::unordered_map<std::string, int> doc_freq;
-            for (const auto& term : terms) {
-                doc_freq[term] = indexes[r]->GetDocumentFrequency(term);
-            }
-
-            // score all candidates, track max bm25 for normalization
-            struct Candidate {
-                int doc_id;
-                Index::DocumentMetadata meta;
-                DocCandidate cand;
-                double bm25_raw;
-            };
-            std::vector<Candidate> candidates;
-            double max_bm25 = 0.0;
-
-            for (int doc_id : doc_ids) {
-                auto meta = indexes[r]->GetDocumentMetadata(doc_id);
-                DocCandidate cand = to_candidate(meta);
-
-                double bm25_raw = bm25.score(cand.body_words, terms, doc_freq);
-                if (bm25_raw > max_bm25) max_bm25 = bm25_raw;
-
-                candidates.push_back({doc_id, std::move(meta), std::move(cand), bm25_raw});
-            }
-
-            // sigmoid normalization for bm25: avoids per-query min-max
-            // inflation. compute median as the centering point.
-            double median_bm25 = 0.0;
-            if (!candidates.empty()) {
-                std::vector<double> bm25_vals;
-                bm25_vals.reserve(candidates.size());
-                for (const auto& c : candidates) bm25_vals.push_back(c.bm25_raw);
-                std::sort(bm25_vals.begin(), bm25_vals.end());
-                median_bm25 = bm25_vals[bm25_vals.size() / 2];
-            }
-            // k controls sigmoid steepness — 0.1 gives a gentle curve
-            for (auto& c : candidates) {
-                double bm25_norm = 1.0 / (1.0 + std::exp(-SIGMOID_K * (c.bm25_raw - median_bm25)));
-                double s = compute_score(terms, c.cand, bm25_norm);
-                if (s <= 0.0) continue;
-
-                RankerInput in;
-                in.url = c.cand.url;
-                in.is_https = (c.cand.url.find("https://") == 0);
-                in.pages_per_domain = 0;
-                in.hop_distance = static_cast<size_t>(std::max(c.cand.hop_distance, 0));
-                in.word_count = 0;
-                in.content_to_html_ratio = 0.0;
-                double ss = StaticRanker(in).rank();
-                double ds = score_dynamic(terms, c.cand, GENERAL, bm25_norm);
-
-                std::string title = join_title(c.meta.title_words);
-                std::string snippet = make_snippet(terms, c.cand.body_words);
-
-                results.push_back({c.doc_id, c.meta.url, title, snippet, ss, ds, s});
-            }
+            auto level_results = search_level(terms, r);
+            results.insert(results.end(), level_results.begin(), level_results.end());
         }
 
         // sort by rank bucket (implicit from order), then score

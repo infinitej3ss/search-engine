@@ -1,10 +1,6 @@
 #pragma once
-#include <iostream>
-#include <iomanip>
 #include <cstring>
-#include <cmath>
 #include <vector>
-#include "Common.h"
 #include "page_data.h"
 #include "HashTable.h"
 

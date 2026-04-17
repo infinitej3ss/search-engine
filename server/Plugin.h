@@ -32,6 +32,22 @@ class PluginObject
 
       virtual std::string ProcessRequest( std::string request ) = 0;
 
+      // override if this plugin wants to stream its response directly
+      // to the socket instead of returning a single string.
+      // default: not streaming.
+      virtual bool StreamingResponse( const std::string /*path*/ )
+         {
+         return false;
+         }
+
+      // called when StreamingResponse returns true. the plugin must write
+      // the complete HTTP response (status line, headers, blank line, body)
+      // to talkFD. the server does not wrap or modify the response.
+      virtual void ProcessStreamingRequest( std::string /*request*/,
+                                             int /*talkFD*/ )
+         {
+         }
+
       virtual ~PluginObject( )
          {
          }

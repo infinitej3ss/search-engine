@@ -45,3 +45,11 @@ sigmoid_k                       0.1
 penalty.title_max_repeat        3
 penalty.non_latin_scale         2.0
 penalty.non_latin_floor         0.2
+
+# shard-side behavior (only relevant when running as a shard)
+# good_threshold: score cutoff for what counts as a "good" result
+# good_count: shard stops streaming once it has emitted this many good results
+# max_results: hard cap per index level (safety against runaway queries)
+shard.good_threshold            0.7
+shard.good_count                30
+shard.max_results               100

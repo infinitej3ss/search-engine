@@ -30,6 +30,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <iostream>
 #include <string.h>
 #include <string>
@@ -355,12 +356,18 @@ void *Talk( void *talkSocket )
 
     // 3 & 4. Check for plugin and if it intercepts this path
     if (Plugin != nullptr && Plugin->MagicPath(reqPath)){
-        string pluginResponse = Plugin->ProcessRequest(reqPath);
-        string header = "HTTP/1.1 200 OK\r\nContent-Length: " + to_string(pluginResponse.length()) + "\r\nConnection: close\r\n\r\n";
-        
-        send(talkFD, header.c_str(), header.length(), 0);
-        send(talkFD, pluginResponse.c_str(), pluginResponse.length(), 0);
-    } 
+        if (Plugin->StreamingResponse(reqPath)) {
+            // plugin writes its own HTTP response directly to the socket.
+            // used for progressive results (shard query streaming).
+            Plugin->ProcessStreamingRequest(reqPath, talkFD);
+        } else {
+            string pluginResponse = Plugin->ProcessRequest(reqPath);
+            string header = "HTTP/1.1 200 OK\r\nContent-Length: " + to_string(pluginResponse.length()) + "\r\nConnection: close\r\n\r\n";
+
+            send(talkFD, header.c_str(), header.length(), 0);
+            send(talkFD, pluginResponse.c_str(), pluginResponse.length(), 0);
+        }
+    }
 
     // 5. If it isn't intercepted, action must be "GET" and the path must be safe.
     // (Passed reqPath instead of fullPath to SafePath)
@@ -413,6 +420,12 @@ int main( int argc, char **argv )
       cerr << "Usage:  " << argv[ 0 ] << " port rootdirectory" << endl;
       return 1;
       }
+
+   // ignore SIGPIPE so writes to a closed peer return -1 instead of killing
+   // the process. needed for streaming responses where the client may close
+   // the socket mid-stream (intentional: leader tells shards to stop; also
+   // browsers dropping connections).
+   signal(SIGPIPE, SIG_IGN);
 
    int port = atoi( argv[ 1 ] );
    RootDirectory = argv[ 2 ];
