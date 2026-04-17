@@ -123,6 +123,43 @@ int main() {
         }
     }
 
+    cout << "\n=== Blob round-trip ===" << endl;
+    {
+        const string path = "test_constraint_solver.blob";
+        tests_run++;
+        if (!index->WriteBlob(path)) {
+            tests_failed++;
+            cout << "  [FAIL] WriteBlob returned false" << endl;
+        } else {
+            Index reloaded;
+            tests_run++;
+            if (!reloaded.LoadBlob(path)) {
+                tests_failed++;
+                cout << "  [FAIL] LoadBlob returned false" << endl;
+            } else {
+                cout << "  [PASS] WriteBlob + LoadBlob succeeded" << endl;
+
+                ConstraintSolver reloaded_solver(&reloaded);
+                expect_eq("reloaded: the AND cat",
+                          reloaded_solver.FindAndQuery({"the", "cat"}), {0, 3});
+                expect_eq("reloaded: cat AND dog",
+                          reloaded_solver.FindAndQuery({"cat", "dog"}), {3});
+                expect_eq("reloaded: cat OR bird",
+                          reloaded_solver.FindOrQuery({"cat", "bird"}),
+                          {0, 2, 3, 4});
+                tests_run++;
+                if (reloaded.GetDocumentCount() == index->GetDocumentCount()) {
+                    cout << "  [PASS] reloaded doc count matches" << endl;
+                } else {
+                    tests_failed++;
+                    cout << "  [FAIL] reloaded doc count " << reloaded.GetDocumentCount()
+                         << " != " << index->GetDocumentCount() << endl;
+                }
+            }
+        }
+        std::remove(path.c_str());
+    }
+
     cout << "\n=== Summary ===" << endl;
     cout << tests_run - tests_failed << " / " << tests_run << " passed" << endl;
 

@@ -119,17 +119,18 @@ class Index{
 
 
         struct DocumentMetadata{
-            //these are the function we need to call to save the values the rank needs.
-            //u_int64_t get_page_file_num(const std::string& file_name);
-            //int get_next_page(PageData& pd) 
             int doc_id = 0;
-            std::string url ;
+            std::string url;
             std::string title;
+            std::vector<std::string> title_words;   // for ranker's DocCandidate
+            std::vector<std::string> body_words;    // for ranker's DocCandidate
+            std::vector<std::string> anchor_texts;  // for ranker's DocCandidate
+            int hop_distance = -1;                  // from PageData::distance_from_seedlist
             int word_count = 0;
             int start_position = 0;
             int end_position = 0;
-            int eod_post_index = 0; // Y - This is the index of the EOD post in the posting list, which we can use to quickly skip to the next document when processing queries. We can calculate this when we add a document by keeping track of how many posts we've added for that document and then marking the last post as the EOD post.
-        };//Document Metadata
+            int eod_post_index = 0;
+        };
 
         Index();
 
@@ -140,6 +141,9 @@ class Index{
         DocumentMetadata GetDocumentMetadata(int docId);
         int GetDocumentCount() const;
         int GetDocumentFrequency(const std::string& term) const;
+
+        bool WriteBlob(const std::string& path) const;
+        bool LoadBlob(const std::string& path);
         //to deal with read only
         //const PostingList* getPostingList(const char* term)const;
         //debugging functions

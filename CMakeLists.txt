@@ -35,7 +35,21 @@ include(CTest)
 include(Catch)
 catch_discover_tests(tests)
 
-# main executable
+# index core — shared between engine and build_index
+add_library(index_core STATIC
+  src/index.cpp
+  src/isr.cpp
+  src/constraint_solver.cpp
+  src/Common.cpp
+  src/page_data.cpp
+)
+target_include_directories(index_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
+
+# query-serving binary
 add_executable(engine src/main.cpp)
-target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(engine PRIVATE index_core ranker_dynamic)
+
+# builder binary — reads crawler page files, writes per-rank index blobs
+add_executable(build_index src/build_index.cpp)
+target_link_libraries(build_index PRIVATE index_core)
 
