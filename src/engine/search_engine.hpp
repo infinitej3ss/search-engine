@@ -151,6 +151,7 @@ private:
         in.hop_distance = static_cast<size_t>(std::max(cand.hop_distance, 0));
         in.word_count = 0;
         in.content_to_html_ratio = 0.0;
+        in.title = join_title(cand.title_words);
 
         double s = StaticRanker(in).rank();
         if (s < 0.0) return -1.0;

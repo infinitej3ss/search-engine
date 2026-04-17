@@ -42,6 +42,8 @@ struct RankerInput {
   size_t word_count; // maybe skipping?
   double content_to_html_ratio; // probably skipping
 
+  // t4
+  std::string title;
 };
 
 // t1 signal functions — each takes a parsed url and returns a score in [0, 1]
@@ -121,6 +123,16 @@ inline double t3_rank(const RankerInput& /* input */) {
   return 1.0;
 }
 
+inline double t4_rank(const RankerInput& input) {
+  size_t len = input.title.size();
+  if (len <= 100) return 1.0;
+
+  size_t excess = len - 100;
+  double penalty = 1.0 - 0.005 * excess;
+
+  return std::max(0.5, penalty);
+}
+
 class StaticRanker {
 private:
   RankerInput input;
@@ -137,7 +149,7 @@ public:
   double rank() {
     if (parsed_url.is_asset) return -1.0;
 
-    return t1_rank(parsed_url) * t2_rank(input);
+    return t1_rank(parsed_url) * t2_rank(input) * t4_rank(input);
 
     // TODO add t3 later
   }
