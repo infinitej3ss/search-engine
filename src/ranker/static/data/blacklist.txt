@@ -1,0 +1,61 @@
+# url blacklist loaded by static ranker at startup
+# source: ut1 blacklists, https://github.com/olbat/ut1-blacklists
+# regenerate: python3 gen_blacklist.py
+#
+# *term  matches anywhere in the url
+#  term  matches only between boundary chars (- . / ? = + _ &)
+
+# compound words
+*adultsight
+*adultsite
+*adultsonly
+*adultweb
+*blowjob
+*bondage
+*centerfold
+*cumshot
+*cybercore
+*cyberlust
+*hardcore
+*masturbat
+*obscene
+*pedofil
+*pedophil
+*playmate
+*pornstar
+*sexdream
+*showgirl
+*softcore
+*striptease
+
+# keyword stems (boundary-delimited)
+adult
+babe
+boob
+breast
+busen
+busty
+clit
+cum
+fetish
+gay
+hooter
+lesb
+lez
+lolit
+lust
+mature
+naked
+nude
+orgasm
+porn
+porno
+pupper
+pussy
+salop
+sex
+smutpump
+teen
+tit
+topples
+xxx
