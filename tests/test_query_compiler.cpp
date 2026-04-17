@@ -13,7 +13,7 @@ TEST_CASE("lowercases ASCII letters", "[query]") {
 TEST_CASE("splits on whitespace", "[query]") {
   REQUIRE(compile("python tutorial") ==
           std::vector<std::string>{"python", "tutorial"});
-  REQUIRE(compile("a\tb\nc") == std::vector<std::string>{"a", "b", "c"});
+  REQUIRE(compile("x\ty\nz") == std::vector<std::string>{"x", "y", "z"});
 }
 
 TEST_CASE("splits on punctuation", "[query]") {
@@ -46,7 +46,28 @@ TEST_CASE("keeps digits inside terms", "[query]") {
           std::vector<std::string>{"abc123", "456"});
 }
 
-TEST_CASE("preserves repeated terms", "[query]") {
-  REQUIRE(compile("python python") ==
-          std::vector<std::string>{"python", "python"});
+TEST_CASE("drops stop words", "[query]") {
+  REQUIRE(compile("the python tutorial") ==
+          std::vector<std::string>{"python", "tutorial"});
+  REQUIRE(compile("a guide to machine learning") ==
+          std::vector<std::string>{"guide", "machine", "learning"});
+}
+
+TEST_CASE("falls back to raw tokens when every term is a stop word", "[query]") {
+  // Stripping all tokens would give an unusable empty query, so we return
+  // the un-filtered tokens instead (de-duplication still applies).
+  REQUIRE(compile("to be or the a") ==
+          std::vector<std::string>{"to", "be", "or", "the", "a"});
+  REQUIRE(compile("the the the") == std::vector<std::string>{"the"});
+}
+
+TEST_CASE("de-duplicates terms, keeping first-occurrence order", "[query]") {
+  REQUIRE(compile("python python") == std::vector<std::string>{"python"});
+  REQUIRE(compile("cat dog cat bird dog") ==
+          std::vector<std::string>{"cat", "dog", "bird"});
+}
+
+TEST_CASE("stop-word removal and de-dup combine cleanly", "[query]") {
+  REQUIRE(compile("the python and the tutorial") ==
+          std::vector<std::string>{"python", "tutorial"});
 }
