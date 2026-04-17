@@ -11,19 +11,15 @@ Index::Index() : dictionary(CompareEqual, str_hash, 1024), globalPositionCounter
 
 Index::~Index() {}
 
-Index::PostingList* Index::getPostingList(const char* term){
-    // FIRST: Try to find existing posting list
-    Tuple<const char*, PostingList>* t = dictionary.Find(term);
-    
+Index::PostingList* Index::getPostingList(const string& term){
+    Tuple<std::string, PostingList>* t = dictionary.Find(term);
     if (!t) {
-        // ONLY create new if not found
         t = dictionary.Find(term, PostingList());
     }
-    
     return &t->value;
-};
+}
 
-void Index::addPost(const char* term, char decoration, int docId){
+void Index::addPost(const std::string& term, char decoration, int docId){
     PostingList* pl = getPostingList(term);
     
     // Check if this is a new document for this term
@@ -71,39 +67,31 @@ void Index::addDocument(const PageData& page){
     // uniqueWords.insert(page.url);
     // addPost(page.url.c_str(), '#', docId);
 
-    std::vector <std::string> urlParts = splitURL(page.url);
+    std::vector<std::string> urlParts = splitURL(page.url);
     for(const std::string& part : urlParts) {
         uniqueWords.insert(part);
-        addPost(part.c_str(), '#', docId);
+        addPost(part, '#', docId);
     }
-    
-    // Add title words
+
     for(const string& word : page.titlewords){
         uniqueWords.insert(word);
-        addPost(word.c_str(), '@', docId);
+        addPost(word, '@', docId);
     }
-    
-    // Add body words
+
     for(const string& word : page.words){
         uniqueWords.insert(word);
-        addPost(word.c_str(), 'b', docId);
+        addPost(word, 'b', docId);
     }
-    
-    // Add anchor text
+
     for(const string& word : page.anchor_text){
         uniqueWords.insert(word);
-        addPost(word.c_str(), '$', docId);
+        addPost(word, '$', docId);
     }
     
     doc_data.word_count = uniqueWords.size();
     doc_data.end_position = globalPositionCounter;
     
     documents.push_back(doc_data);
-}
-
-// Keep the rest of your functions as they were...
-Index::PostingList* Index::getPostingList(const string& term){
-    return getPostingList(term.c_str());
 }
 
 Index::DocumentMetadata Index::GetDocumentMetadata(int docId){
@@ -115,7 +103,7 @@ int Index::GetDocumentCount() const{
 }
 
 int Index::GetDocumentFrequency(const string& term) const {
-    Tuple<const char*, PostingList>* t = dictionary.Find(term.c_str());
+    Tuple<std::string, PostingList>* t = dictionary.Find(term);
     if (!t) return 0;
     return t->value.num_docs;
 }

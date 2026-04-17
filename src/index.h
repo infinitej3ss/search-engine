@@ -148,7 +148,6 @@ class Index{
 
         void EnableDebug(bool enable) { debug_mode = enable; }
         void SetDebugWord(const std::string& word) { debug_word = word; }
-        PostingList* getPostingList(const char* term);
         
         vector<string> splitURL(const string& url){
             vector<string> parts;
@@ -178,15 +177,12 @@ class Index{
 
         
     private:
-        HashTable <const char*, PostingList> dictionary;
+        HashTable<std::string, PostingList> dictionary;
 
         std::vector<DocumentMetadata> documents;
-        int globalPositionCounter = 0; 
+        int globalPositionCounter = 0;
 
-        
-        void addPost(const char* term, char decoration, int docId); 
-        //void addPost(const char* term, char decoration);
-        std::vector< std::string> wordStorage; 
+        void addPost(const std::string& term, char decoration, int docId);
         //debugging
         bool debug_mode = false;
         std::string debug_word;

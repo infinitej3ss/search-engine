@@ -16,8 +16,10 @@
 // YOUR CODE HERE
 
 uint64_t str_hash( const char * k );
+uint64_t str_hash( const std::string k );
 
 bool CompareEqual(char const*, char const*);
+bool CompareEqual(const std::string lhs, const std::string rhs);
 
 // Build a HashTable of strings and numbers of occurrences, given a vector
 // of strings representing the words.  You may assume the vector and the

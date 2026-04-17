@@ -37,6 +37,14 @@ bool CompareEqual(const char *lhs, const char *rhs) {
     return strcmp(lhs, rhs) == 0;
 }
 
+uint64_t str_hash(const std::string k) {
+    return str_hash(k.c_str());
+}
+
+bool CompareEqual(const std::string lhs, const std::string rhs) {
+    return lhs == rhs;
+}
+
 using Hash = HashTable< const char *, size_t >;
 using Pair = Tuple< const char *, size_t >;
 
