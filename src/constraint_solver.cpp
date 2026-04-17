@@ -1,5 +1,6 @@
 // constraint_solver.cpp
 #include "constraint_solver.h"
+#include <set>
 
 ConstraintSolver::ConstraintSolver(Index* idx) : index(idx) {}
 
@@ -24,87 +25,60 @@ std::vector<int> ConstraintSolver::FindAndQuery(const std::vector<std::string>& 
     }
     
     std::vector<int> results;
-    
-    // Continuously finds matching documents until we run out of postings
+
+    // Classical multi-ISR AND: advance every ISR to the max docId across them.
+    // When all land on the same doc, it's a match; advance past and repeat.
     while (true) {
-        // Find the smallest current document ID
-        // This is the document ID that all ISRs need to catch up to in order to find a match
-        // i.e. they all need to be in the same doc in order for them to match a query that requires all terms
-        int currentDoc = -1;
+        int maxDoc = -1;
         bool allValid = true;
-        
+
         for (ISR* isr : isrs) {
-            if (!isr->IsValid()) {
-                allValid = false;
-                break;
-            }
+            if (!isr->IsValid()) { allValid = false; break; }
             int docId = isr->GetCurrentDocId();
-            if (currentDoc == -1 || docId < currentDoc) {
-                currentDoc = docId;
-            }
+            if (docId < 0) { allValid = false; break; }
+            if (docId > maxDoc) maxDoc = docId;
         }
-        
         if (!allValid) break;
-        
-        // Check if all ISRs are at the same document
+
         bool allMatch = true;
         for (ISR* isr : isrs) {
-            if (isr->GetCurrentDocId() != currentDoc) {
-                allMatch = false;
-                break;
-            }
+            if (isr->GetCurrentDocId() != maxDoc) { allMatch = false; break; }
         }
-        
-        // If all ISRs are at the same document, we found a match for the AND query
+
         if (allMatch) {
-            results.push_back(currentDoc);
-            // Advance all ISRs past this document
+            results.push_back(maxDoc);
             for (ISR* isr : isrs) {
-                // Skip to the next document
-                if (!isr->SkipToDoc(currentDoc + 1)) {
-                    // Can't reach next document, we're done
-                    for (ISR* i : isrs) delete i;
-                    return results;
-                }
+                if (!isr->SkipToDoc(maxDoc + 1)) { allValid = false; break; }
             }
+            if (!allValid) break;
         } else {
-            // Advance ISRs that are behind to catch up to the currentDoc
             for (ISR* isr : isrs) {
-                if (isr->GetCurrentDocId() < currentDoc) {
-                    if (!isr->SkipToDoc(currentDoc)) {
-                        // Can't reach currentDoc - no more matches
-                        for (ISR* i : isrs) delete i;
-                        return results;
-                    }
+                if (isr->GetCurrentDocId() < maxDoc) {
+                    if (!isr->SkipToDoc(maxDoc)) { allValid = false; break; }
                 }
             }
+            if (!allValid) break;
         }
     }
-    
-    // Clean up - delete all ISRs
+
     for (ISR* isr : isrs) delete isr;
     return results;
 }
 
 std::vector<int> ConstraintSolver::FindOrQuery(const std::vector<std::string>& terms) {
     if (terms.empty()) return {};
-    
-    // For OR query, we need to merge all unique document IDs
-    // This is simpler - just collect all docs from all terms
-    std::vector<int> results;
-    
+
+    std::set<int> docSet;
+
     for (const auto& term : terms) {
         ISR isr(index, term);
         while (isr.IsValid()) {
             int docId = isr.GetCurrentDocId();
-            // Avoid duplicates
-            if (std::find(results.begin(), results.end(), docId) == results.end()) {
-                results.push_back(docId);
-            }
-            // Move to next document (skip all posts in current doc)
-            isr.SkipToDoc(docId + 1);
+            if (docId < 0) break;
+            docSet.insert(docId);
+            if (!isr.SkipToDoc(docId + 1)) break;
         }
     }
-    
-    return results;
+
+    return std::vector<int>(docSet.begin(), docSet.end());
 }

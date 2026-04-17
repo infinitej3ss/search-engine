@@ -33,18 +33,18 @@ ISR::ISR(Index* idx, const std::string& term): index(idx), currentPostIdx(0), cu
 }*/
 bool ISR::Next() {
     if (!IsValid()) return false;
-    
+
     do {
         if (currentPostIdx + 1 >= (int)postingList->posts.size()) {
             currentPostIdx = postingList->posts.size();
             return false;
         }
-        
+
         currentPostIdx++;
         currentAbsolutePos += index->decodeDelta(postingList->posts[currentPostIdx]);
-        
-    } while (index->decodeDecoration(postingList->posts[currentPostIdx]) == 4); // Skip EODs
-    
+
+    } while (index->decodeDecoration(postingList->posts[currentPostIdx]) == '%');
+
     return true;
 }
 
@@ -55,24 +55,38 @@ bool ISR::Seek(int location){
 
     int checkpoint_abs = 0;
     int checkpoint_inx = 0;
+    bool has_checkpoint = postingList->findCheckpoint(location, checkpoint_abs, checkpoint_inx);
 
-    postingList->findCheckpoint(location, checkpoint_abs, checkpoint_inx);
-
-    // Just added this line but I'm not sure if I'll need it - Y
-    // Missing Step: jump to checkpoint -
-    // We need this because if we don't jump to the checkpoint, we'll be starting from the beginning of the posting list every time we call Seek, which would be inefficient for large posting lists. 
-    // By jumping to the checkpoint, we can skip a large portion of the posting list and start our search closer to the target location, which can significantly reduce the number of posts we need to iterate through.
-    currentPostIdx = checkpoint_inx;
-    currentAbsolutePos = checkpoint_abs;
-
+    if (has_checkpoint) {
+        currentPostIdx = checkpoint_inx;
+        currentAbsolutePos = checkpoint_abs;
+    } else {
+        // No checkpoint: start at post 0 with its delta (matches constructor init).
+        currentPostIdx = 0;
+        currentAbsolutePos = index->decodeDelta(postingList->posts[0]);
+    }
 
     while (IsValid() && currentAbsolutePos < location) {
-        if (currentPostIdx + 1 >= (int)postingList->posts.size()) return false;
+        if (currentPostIdx + 1 >= (int)postingList->posts.size()) {
+            currentPostIdx = postingList->posts.size();
+            return false;
+        }
         currentPostIdx++;
         currentAbsolutePos += index->decodeDelta(postingList->posts[currentPostIdx]);
     }
 
-    return currentAbsolutePos >= location;
+    // Skip past any EOD posts — doc boundaries are shared slots, so Seek can
+    // land on a previous doc's EOD when target == shared boundary position.
+    while (IsValid() && index->decodeDecoration(postingList->posts[currentPostIdx]) == '%') {
+        if (currentPostIdx + 1 >= (int)postingList->posts.size()) {
+            currentPostIdx = postingList->posts.size();
+            return false;
+        }
+        currentPostIdx++;
+        currentAbsolutePos += index->decodeDelta(postingList->posts[currentPostIdx]);
+    }
+
+    return IsValid() && currentAbsolutePos >= location;
 }
 
 // New addition: Get current document ID by binary searching EOD boundaries
@@ -105,13 +119,10 @@ int ISR::GetCurrentDocId() const {
 // This is used in the constraint solver to advance ISRs that are behind to catch up to the current document being evaluated.
 bool ISR::SkipToDoc(int targetDocId) {
     if (!IsValid()) return false;
-    
-    // Get the document's start position
+    if (targetDocId < 0 || targetDocId >= index->GetDocumentCount()) return false;
+
     Index::DocumentMetadata meta = index->GetDocumentMetadata(targetDocId);
-    int targetPos = meta.start_position;
-    
-    // Use existing Seek to jump to that position
-    return Seek(targetPos);
+    return Seek(meta.start_position);
 }
 
 bool ISR::IsValid() const {
