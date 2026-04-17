@@ -1,23 +1,30 @@
-## contributing
+## Contributing
 
-### requirements
-
-- CMake 3.20+
-- Ninja
-- a C++20 compiler (clang or gcc)
-
-### building
+### Build
 
 ```bash
 cmake --preset default
 cmake --build build
 ```
 
-the main executable is `build/engine`. the test executable is `build/tests`.
+Produces `build/engine`, `build/build_index`, and `build/tests`.
 
-### running tests
+### Run the search engine
+
+Crawler data lives in `data/`. From there:
+
+```bash
+cd data
+../build/build_index      # builds index blobs from crawler files
+../build/engine           # starts the query prompt
+```
+
+Type a query at the `>` prompt. Edit `weights.txt` between queries to retune — no rebuild needed.
+
+### Run tests
 
 ```bash
 ctest --test-dir build --output-on-failure
 ```
 
+Add a test by dropping a `.cpp` file in `tests/`. CMake picks it up automatically.

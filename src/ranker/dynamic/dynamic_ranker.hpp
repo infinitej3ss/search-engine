@@ -15,6 +15,7 @@ struct DocCandidate {
   uint32_t doc_id = 0;
   std::string url;
   std::vector<std::string> title_words;
+  std::vector<std::string> body_words;
   std::vector<std::string> anchor_texts;
   int hop_distance = -1;   // -1 if unknown
   std::string domain;
