@@ -8,8 +8,9 @@ results_needed 20
 good_threshold 0.8
 
 # shards — running locally for testing (one per rank blob)
-127.0.0.1:9000
-127.0.0.1:9001
-127.0.0.1:9002
-127.0.0.1:9003
-127.0.0.1:9004
+https://34.10.117.104:9000
+https://34.132.40.15:9000
+https://35.239.83.9:9000
+https://34.10.126.25:9000
+https://34.132.211.46:9000
+https://34.55.189.217:9000

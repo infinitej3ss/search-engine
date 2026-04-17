@@ -107,7 +107,7 @@ The crawler shards raw pages across VMs by domain hash, so each machine has a di
 **2. Start the shard service:**
 
 ```bash
-SHARD_DATA_DIR=/opt/searchengine/data build/shard_server 9000 .
+SHARD_DATA_DIR=~/search-engine/data build/shard_server 9000 .
 ```
 
 Bind port 9000 to an interface reachable by the leader. Make sure the firewall allows inbound connections from the leader's IP on that port.

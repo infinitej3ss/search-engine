@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstddef>
 #include <cctype>
-#include <cmath>
 #include <algorithm>
 
 #include "span_finder.hpp"
