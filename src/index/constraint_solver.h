@@ -1,7 +1,7 @@
 // constraint_solver.h
 #pragma once
 
-#include "Index.h"
+#include "index.h"
 #include "isr.h"
 #include <vector>
 #include <string>

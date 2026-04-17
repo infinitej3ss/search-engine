@@ -1,7 +1,7 @@
 // isr.h
 #pragma once
 
-#include "Index.h"  // Need Index class for DocumentMetadata
+#include "index.h"  // Need Index class for DocumentMetadata
 
 class ISR {
 private:
