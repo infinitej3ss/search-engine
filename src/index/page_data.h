@@ -27,7 +27,7 @@ struct PageFile {
     std::vector<std::vector<u_int8_t>> page_data_entries; // stored as serialized data in the vectors' data
 };
 
-const u_int64_t NUM_PAGE_FILE_RANKS = 5;                    // number of page files to be written to based on url's ranking
+const u_int64_t NUM_PAGE_FILE_RANKS = 10;                    // number of page files to be written to based on url's ranking
 const u_int64_t MAX_PAGE_FILE_SIZE_BYTES = 1000000;       // 200MB
 const u_int64_t CORRECT_MAGIC_NUMBER = 863404304674789781;  // magic number for page file
 
