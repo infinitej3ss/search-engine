@@ -40,6 +40,12 @@ static std::string get_query_param(const std::string& path, const std::string& k
     return "";
 }
 
+static int get_int_param(const std::string& path, const std::string& key, int fallback) {
+    std::string val = get_query_param(path, key);
+    if (val.empty()) return fallback;
+    try { return std::stoi(val); } catch (...) { return fallback; }
+}
+
 // json formatting
 
 static std::string json_escape(const std::string& s) {
@@ -58,10 +64,12 @@ static std::string json_escape(const std::string& s) {
 }
 
 static std::string results_to_json(const std::string& query,
-                                    const std::vector<SearchResult>& results) {
+                                    const std::vector<SearchResult>& results,
+                                    int total, int offset) {
     std::ostringstream json;
     json << "{\"query\":\"" << json_escape(query) << "\","
-         << "\"total\":" << results.size() << ","
+         << "\"total\":" << total << ","
+         << "\"offset\":" << offset << ","
          << "\"results\":[";
 
     for (size_t i = 0; i < results.size(); i++) {
@@ -69,6 +77,8 @@ static std::string results_to_json(const std::string& query,
         const auto& r = results[i];
         json << "{\"doc_id\":" << r.doc_id
              << ",\"url\":\"" << json_escape(r.url) << "\""
+             << ",\"title\":\"" << json_escape(r.title) << "\""
+             << ",\"snippet\":\"" << json_escape(r.snippet) << "\""
              << ",\"static_score\":" << r.static_score
              << ",\"dynamic_score\":" << r.dynamic_score
              << ",\"combined_score\":" << r.combined_score
@@ -96,8 +106,12 @@ public:
 
     std::string ProcessRequest(std::string request) override {
         std::string query_str = get_query_param(request, "q");
-        auto results = engine.search(query_str);
-        return results_to_json(query_str, results);
+        int offset = get_int_param(request, "offset", 0);
+        int limit = get_int_param(request, "limit", 10);
+
+        int total = 0;
+        auto results = engine.search(query_str, offset, limit, &total);
+        return results_to_json(query_str, results, total, offset);
     }
 };
 

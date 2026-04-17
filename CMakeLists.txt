@@ -20,35 +20,57 @@ list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 
 # ---- libraries -----------------------------------------------------------
 
-# ranker dynamic — non-header-only components (BM25 scorer, etc.)
-add_library(ranker_dynamic STATIC src/ranker/dynamic/bm25.cpp)
-target_include_directories(ranker_dynamic PUBLIC ${CMAKE_SOURCE_DIR}/src)
-
-# index core — shared between engine, build_index, and tests
+# index core: index, isr, constraint solver, page data
 add_library(index_core STATIC
-  src/index.cpp
-  src/isr.cpp
-  src/constraint_solver.cpp
-  src/Common.cpp
-  src/page_data.cpp
+  src/index/index.cpp
+  src/index/isr.cpp
+  src/index/constraint_solver.cpp
+  src/index/Common.cpp
+  src/index/page_data.cpp
 )
-target_include_directories(index_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(index_core PUBLIC
+  ${CMAKE_SOURCE_DIR}/src/index
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
+)
 
 # ---- executables ---------------------------------------------------------
 
-# query-serving binary
+# standalone query engine (cli demo)
 add_executable(engine src/main.cpp)
-target_link_libraries(engine PRIVATE index_core ranker_dynamic)
+target_link_libraries(engine PRIVATE index_core)
 
-# builder binary — reads crawler page files, writes per-rank index blobs
+# index builder: reads crawler page files, writes per-rank blobs
 add_executable(build_index src/build_index.cpp)
 target_link_libraries(build_index PRIVATE index_core)
+
+# search server: linuxtinyserver + search plugin
+add_executable(search_server
+  server/LinuxTinyServer.cpp
+  server/SearchPlugin.cpp
+)
+target_include_directories(search_server PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(search_server PRIVATE index_core)
+
+# shard server: disabled until ShardPlugin is updated to use real Index class
+# add_executable(shard_server
+#   server/LinuxTinyServer.cpp
+#   server/ShardPlugin.cpp
+# )
+# target_include_directories(shard_server PRIVATE
+#   ${CMAKE_SOURCE_DIR}/src
+#   ${CMAKE_SOURCE_DIR}
+# )
+# target_link_libraries(shard_server PRIVATE index_core)
 
 # ---- tests ---------------------------------------------------------------
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
 add_executable(tests ${TEST_SOURCES})
-target_link_libraries(tests PRIVATE Catch2::Catch2WithMain ranker_dynamic index_core)
+target_link_libraries(tests PRIVATE Catch2::Catch2WithMain index_core)
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 enable_testing()

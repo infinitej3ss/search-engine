@@ -3,20 +3,26 @@
 # are ignored. Unknown keys are warned about and skipped.
 
 # T1 — static URL-signal weights (src/ranker/static/static_ranker.hpp)
-tld                     3.0
-url_len                 1.0
-path_depth              1.0
-subdomain_depth         0.5
+tld                     2.0
+url_len                 0.3
+path_depth              0.3
+subdomain_depth         0.0
 ip_in_url               1.0
 special_char_density    2.0
 blacklist               1.0
 
 # Dynamic weight profiles (src/ranker/config/weight_profiles.hpp)
 # (metastream = T1 field matches, span = T2 proximity, quality = T3 global)
-profile.general.metastream      0.35
-profile.general.span            0.45
-profile.general.quality         0.20
+profile.general.metastream      0.25
+profile.general.span            0.25
+profile.general.quality         0.15
+profile.general.bm25            0.35
 
-profile.navigational.metastream 0.60
-profile.navigational.span       0.15
-profile.navigational.quality    0.25
+profile.navigational.metastream 0.45
+profile.navigational.span       0.10
+profile.navigational.quality    0.15
+profile.navigational.bm25       0.30
+
+# static^α × dynamic^(1-α) combination
+# 0.5 = equal weight, <0.5 favors relevance, >0.5 favors quality
+combine_alpha                   0.4

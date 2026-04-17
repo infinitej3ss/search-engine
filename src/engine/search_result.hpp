@@ -7,6 +7,8 @@
 struct SearchResult {
     int doc_id;
     std::string url;
+    std::string title;
+    std::string snippet;
     double static_score;
     double dynamic_score;
     double combined_score;

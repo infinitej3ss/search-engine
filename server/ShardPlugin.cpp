@@ -152,7 +152,7 @@ private:
             double ds = compute_dynamic_score(terms, doc_id, url);
             double combined = ss * ds;
 
-            results.push_back({doc_id, url ? url : "", ss, ds, combined});
+            results.push_back({doc_id, url ? url : "", "", "", ss, ds, combined});
         }
 
         free_results(doc_ids);
