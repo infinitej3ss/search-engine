@@ -1,8 +1,8 @@
 #include <cstdio>
 #include <string>
 
-#include "index.h"
-#include "page_data.h"
+#include "index/index.h"
+#include "index/page_data.h"
 
 // Reads crawler page files `crawled_page_rank_<r>_num_<n>` from cwd and
 // writes one blob per rank: `index_rank_<r>.blob`.

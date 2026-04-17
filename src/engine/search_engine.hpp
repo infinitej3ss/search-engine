@@ -1,172 +1,239 @@
 #pragma once
 
-// core search logic: index management, query execution, ranking.
-// server/plugin layer calls into this — keeps http concerns separate.
+// core search logic. two modes:
+// - local: loads index blobs (or demo corpus) in-process
+// - distributed: fans out to shards via query_distributor
 
+#include <algorithm>
+#include <cstdio>
+#include <filesystem>
+#include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
-#include <algorithm>
-#include <iostream>
-#include <cstdint>
 
-#include "../../index/simple_api.h"
+#include "search_result.hpp"
+#include "query_distributor.hpp"
+#include "../index/index.h"
+#include "../index/page_data.h"
+#include "../index/constraint_solver.h"
+#include "../query/query_compiler.hpp"
 #include "../../config/weights.hpp"
 #include "../ranker/static/static_ranker.hpp"
 #include "../ranker/dynamic/dynamic_ranker.hpp"
 
-struct SearchResult {
-    int doc_id;
-    std::string url;
-    double static_score;
-    double dynamic_score;
-    double combined_score;
-};
+static constexpr int DEFAULT_TOP_K = 10;
 
 class SearchEngine {
 private:
-    IndexHandle index;
+    // local mode, one index per rank bucket
+    std::vector<std::unique_ptr<Index>> indexes;
     std::string weights_path;
+    int top_k;
 
-    void load_dummy_data() {
-        // placeholder data for development. swap this out for
-        // build_index_from_crawler() once crawl data is available.
-        struct Doc {
-            const char* url;
-            std::vector<const char*> title;
-            std::vector<const char*> body;
-            int distance;
+    // distributed mode
+    QueryDistributor* distributor = nullptr;
+
+    static DocCandidate to_candidate(const Index::DocumentMetadata& meta) {
+        DocCandidate d;
+        d.doc_id = static_cast<uint32_t>(meta.doc_id);
+        d.url = meta.url;
+        d.title_words = meta.title_words;
+        d.body_words = meta.body_words;
+        d.anchor_texts = meta.anchor_texts;
+        d.hop_distance = meta.hop_distance;
+        return d;
+    }
+
+    static double compute_score(const std::vector<std::string>& terms,
+                                 const DocCandidate& cand) {
+        RankerInput in;
+        in.url = cand.url;
+        in.is_https = (cand.url.find("https://") == 0);
+        in.pages_per_domain = 0;
+        in.hop_distance = static_cast<size_t>(std::max(cand.hop_distance, 0));
+        in.word_count = 0;
+        in.content_to_html_ratio = 0.0;
+
+        double s = StaticRanker(in).rank();
+        if (s < 0.0) return -1.0;
+        return s * score_dynamic(terms, cand, GENERAL);
+    }
+
+    // demo corpus for when no index blobs are available
+    static std::vector<PageData> make_demo_corpus() {
+        auto mk = [](uint64_t hop, const std::string& url,
+                     std::vector<std::string> title,
+                     std::vector<std::string> anchor) {
+            PageData p;
+            p.distance_from_seedlist = hop;
+            p.url = url;
+            p.titlewords = title;
+            p.words = title;
+            p.anchor_text = std::move(anchor);
+            return p;
         };
-
-        Doc docs[] = {
-            {
-                "https://en.wikipedia.org/wiki/Cat",
-                {"cats", "wikipedia"},
-                {"cats", "are", "small", "domesticated", "feline", "mammals"},
-                0
-            },
-            {
-                "https://www.petfinder.com/cats/",
-                {"adopt", "a", "cat"},
-                {"find", "cats", "for", "adoption", "near", "you", "pets", "animals"},
-                1
-            },
-            {
-                "https://example.com/dogs",
-                {"dogs", "canine"},
-                {"dogs", "are", "friendly", "loyal", "pets"},
-                1
-            },
-            {
-                "https://en.wikipedia.org/wiki/Pet",
-                {"pet", "wikipedia"},
-                {"a", "pet", "is", "an", "animal", "kept", "for", "companionship",
-                 "cats", "dogs", "are", "common", "pets"},
-                2
-            },
-            {
-                "https://news.ycombinator.com",
-                {"hacker", "news"},
-                {"technology", "startups", "programming", "science"},
-                3
-            },
+        return {
+            mk(1, "https://docs.python.org/3/tutorial/",                {"the","python","tutorial"},                     {"python","docs"}),
+            mk(0, "https://www.python.org/",                            {"welcome","to","python","org"},                 {"python"}),
+            mk(2, "https://realpython.com/python-first-steps/",         {"python","first","steps"},                      {"python","beginners"}),
+            mk(2, "https://wiki.python.org/moin/BeginnersGuide",        {"beginners","guide","python","wiki"},           {"beginner","python"}),
+            mk(1, "https://en.cppreference.com/w/cpp",                  {"c","reference"},                               {"cpp","stdlib","reference"}),
+            mk(1, "https://isocpp.org/",                                {"standard","c"},                                {"c","iso"}),
+            mk(2, "https://en.cppreference.com/w/cpp/language/tutorial",{"c","language","tutorial"},                     {"cpp","tutorial"}),
+            mk(1, "https://scikit-learn.org/stable/",                   {"scikit","learn","machine","learning","in","python"}, {"sklearn","machine","learning"}),
+            mk(1, "https://www.tensorflow.org/tutorials",               {"tensorflow","tutorials"},                      {"tensorflow","tutorial","ml"}),
+            mk(1, "https://pytorch.org/tutorials/",                     {"welcome","to","pytorch","tutorials"},          {"pytorch","tutorial"}),
+            mk(2, "https://en.wikipedia.org/wiki/Machine_learning",     {"machine","learning","wikipedia"},              {"ml","wiki"}),
+            mk(3, "https://arxiv.org/abs/1706.03762",                   {"attention","is","all","you","need"},           {"transformer","paper","attention"}),
+            mk(5, "https://example.tk/get-rich-python-tutorial-FREE",   {"free","python","tutorial","click","now"},      {}),
+            mk(6, "http://192.168.0.1/python/tutorial.html",            {"python","tutorial"},                           {}),
+            mk(2, "https://stackoverflow.com/questions/tagged/python",  {"newest","python","questions","stack","overflow"}, {"python","stackoverflow"}),
         };
+    }
 
-        for (auto& doc : docs) {
-            add_document(index, doc.url,
-                doc.title.data(), static_cast<int>(doc.title.size()),
-                doc.body.data(), static_cast<int>(doc.body.size()),
-                doc.distance);
+    // try to load per-rank index blobs from the data directory
+    int load_rank_blobs(const std::string& data_dir) {
+        for (int rank = 0; rank < static_cast<int>(NUM_PAGE_FILE_RANKS); rank++) {
+            std::string path = data_dir + "/index_rank_" + std::to_string(rank) + ".blob";
+            if (!std::filesystem::exists(path)) continue;
+            auto idx = std::make_unique<Index>();
+            if (!idx->LoadBlob(path)) {
+                std::fprintf(stderr, "[engine] failed to load %s\n", path.c_str());
+                continue;
+            }
+            std::fprintf(stderr, "[engine] loaded %s (%d docs)\n",
+                         path.c_str(), idx->GetDocumentCount());
+            indexes.push_back(std::move(idx));
+        }
+        return static_cast<int>(indexes.size());
+    }
+
+    void load_demo_corpus() {
+        auto idx = std::make_unique<Index>();
+        for (const auto& page : make_demo_corpus())
+            idx->addDocument(page);
+        idx->Finalize();
+        std::fprintf(stderr, "[engine] loaded demo corpus (%d docs)\n",
+                     idx->GetDocumentCount());
+        indexes.push_back(std::move(idx));
+    }
+
+    // cascading search across rank buckets
+    std::vector<SearchResult> search_local(const std::vector<std::string>& terms) {
+        std::vector<SearchResult> results;
+
+        for (size_t r = 0; r < indexes.size(); r++) {
+            ConstraintSolver solver(indexes[r].get());
+            auto doc_ids = solver.FindAndQuery(terms);
+
+            for (int doc_id : doc_ids) {
+                auto meta = indexes[r]->GetDocumentMetadata(doc_id);
+                DocCandidate cand = to_candidate(meta);
+                double s = compute_score(terms, cand);
+                if (s <= 0.0) continue;
+
+                // static and dynamic are baked into the combined score
+                // via multiplicative blend. expose them separately for
+                // the frontend debug view
+                RankerInput in;
+                in.url = cand.url;
+                in.is_https = (cand.url.find("https://") == 0);
+                in.pages_per_domain = 0;
+                in.hop_distance = static_cast<size_t>(std::max(cand.hop_distance, 0));
+                in.word_count = 0;
+                in.content_to_html_ratio = 0.0;
+                double ss = StaticRanker(in).rank();
+                double ds = score_dynamic(terms, cand, GENERAL);
+
+                results.push_back({doc_id, meta.url, ss, ds, s});
+            }
+
+            // cascade: stop descending ranks once we have enough
+            if (static_cast<int>(results.size()) >= top_k) break;
         }
 
-        finalize_index(index);
-        std::cerr << "[engine] loaded " << get_document_count(index)
-                  << " documents" << std::endl;
+        // sort by rank bucket (implicit from order), then score
+        std::sort(results.begin(), results.end(),
+            [](const SearchResult& a, const SearchResult& b) {
+                return a.combined_score > b.combined_score;
+            });
+
+        if (static_cast<int>(results.size()) > top_k)
+            results.resize(top_k);
+
+        return results;
     }
 
-    double compute_static_score(const char* url) {
-        if (!url) return 0.0;
-
-        RankerInput rinput;
-        rinput.url = url;
-        rinput.is_https = (std::string(url).find("https://") == 0);
-        rinput.pages_per_domain = 0;
-        rinput.hop_distance = 0;
-        rinput.word_count = 0;
-        rinput.content_to_html_ratio = 0.0;
-
-        StaticRanker ranker(rinput);
-        double s = ranker.rank();
-        return s < 0.0 ? 0.0 : s;
-    }
-
-    double compute_dynamic_score(const std::vector<std::string>& terms,
-                                  int doc_id, const char* url) {
-        DocCandidate candidate;
-        candidate.doc_id = static_cast<uint32_t>(doc_id);
-        candidate.url = url ? url : "";
-        candidate.hop_distance = -1;
-
-        return score_dynamic(terms, candidate, GENERAL);
+    std::vector<SearchResult> search_distributed(const std::vector<std::string>& terms) {
+        std::string query_str;
+        for (size_t i = 0; i < terms.size(); i++) {
+            if (i > 0) query_str += " ";
+            query_str += terms[i];
+        }
+        return distributor->search(query_str);
     }
 
 public:
-    SearchEngine(const std::string& weights_file)
-        : weights_path(weights_file) {
-        index = create_index();
+    // local mode: load blobs from data_dir, fall back to demo corpus
+    SearchEngine(const std::string& weights_file,
+                 const std::string& data_dir = ".",
+                 int k = DEFAULT_TOP_K)
+        : weights_path(weights_file), top_k(k) {
 
         if (!load_and_apply_weights(weights_path)) {
             std::cerr << "[engine] warning: could not load " << weights_path
                       << ", all weights are zero" << std::endl;
         }
 
-        load_dummy_data();
+        if (load_rank_blobs(data_dir) == 0) {
+            std::cerr << "[engine] no index blobs found in " << data_dir
+                      << ", using demo corpus" << std::endl;
+            load_demo_corpus();
+        }
+
+        int total = 0;
+        for (const auto& idx : indexes) total += idx->GetDocumentCount();
+        std::fprintf(stderr, "[engine] ready: %zu rank(s), %d docs\n",
+                     indexes.size(), total);
+    }
+
+    // distributed mode
+    SearchEngine(const std::string& weights_file,
+                 const std::string& data_dir,
+                 const std::string& shards_config,
+                 int k = DEFAULT_TOP_K)
+        : weights_path(weights_file), top_k(k) {
+
+        if (!load_and_apply_weights(weights_path)) {
+            std::cerr << "[engine] warning: could not load " << weights_path << std::endl;
+        }
+
+        distributor = new QueryDistributor(shards_config);
+
+        if (!distributor->has_shards()) {
+            std::cerr << "[engine] no shards configured, falling back to local" << std::endl;
+            delete distributor;
+            distributor = nullptr;
+
+            if (load_rank_blobs(data_dir) == 0) load_demo_corpus();
+        } else {
+            std::cerr << "[engine] running in distributed mode" << std::endl;
+        }
     }
 
     ~SearchEngine() {
-        destroy_index(index);
+        delete distributor;
     }
 
-    // runs a query: reload weights, hit the index, rank, sort, return
-    std::vector<SearchResult> search(const std::vector<std::string>& terms) {
-        std::vector<SearchResult> results;
-        if (terms.empty()) return results;
+    // main entry point. takes raw user query, compiles it, searches.
+    std::vector<SearchResult> search(const std::string& raw_query) {
+        auto terms = query::compile(raw_query);
+        if (terms.empty()) return {};
 
-        // reload weights on every query so edits take effect live
         load_and_apply_weights(weights_path);
 
-        // build the c-style array the index api expects
-        std::vector<const char*> c_terms;
-        for (const auto& t : terms) {
-            c_terms.push_back(t.c_str());
-        }
-
-        int result_count = 0;
-        int* doc_ids = find_and_query(index, c_terms.data(),
-            static_cast<int>(c_terms.size()), &result_count);
-
-        std::cerr << "[engine] query terms=" << terms.size()
-                  << " results=" << result_count << std::endl;
-
-        for (int i = 0; i < result_count; i++) {
-            int doc_id = doc_ids[i];
-            const char* url = get_document_url(index, doc_id);
-
-            double ss = compute_static_score(url);
-            double ds = compute_dynamic_score(terms, doc_id, url);
-
-            // multiplicative combination — matches ranker team's approach
-            double combined = ss * ds;
-
-            results.push_back({doc_id, url ? url : "", ss, ds, combined});
-        }
-
-        free_results(doc_ids);
-
-        std::sort(results.begin(), results.end(),
-            [](const SearchResult& a, const SearchResult& b) {
-                return a.combined_score > b.combined_score;
-            });
-
-        return results;
+        if (distributor) return search_distributed(terms);
+        return search_local(terms);
     }
 };

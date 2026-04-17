@@ -1,0 +1,12 @@
+# shard configuration for distributed search
+# one host:port per line for each index shard
+# tuning parameters below
+
+timeout_ms 500
+shard_timeout_ms 400
+results_needed 10
+
+# shards — uncomment and fill in when deployed
+# 192.168.1.10:9090
+# 192.168.1.11:9090
+# 192.168.1.12:9090

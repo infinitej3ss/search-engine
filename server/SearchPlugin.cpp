@@ -40,16 +40,6 @@ static std::string get_query_param(const std::string& path, const std::string& k
     return "";
 }
 
-static std::vector<std::string> split_terms(const std::string& query) {
-    std::vector<std::string> terms;
-    std::istringstream stream(query);
-    std::string word;
-    while (stream >> word) {
-        terms.push_back(word);
-    }
-    return terms;
-}
-
 // json formatting
 
 static std::string json_escape(const std::string& s) {
@@ -96,7 +86,7 @@ private:
     SearchEngine engine;
 
 public:
-    SearchPlugin() : engine("config/weights.txt") {
+    SearchPlugin() : engine("config/weights.txt", "data") {
         Plugin = this;
     }
 
@@ -106,10 +96,7 @@ public:
 
     std::string ProcessRequest(std::string request) override {
         std::string query_str = get_query_param(request, "q");
-        std::vector<std::string> terms = split_terms(query_str);
-
-        auto results = engine.search(terms);
-
+        auto results = engine.search(query_str);
         return results_to_json(query_str, results);
     }
 };

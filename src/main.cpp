@@ -6,11 +6,11 @@
 #include <string>
 #include <vector>
 
-#include "index.h"
-#include "page_data.h"
-#include "constraint_solver.h"
+#include "index/index.h"
+#include "index/page_data.h"
+#include "index/constraint_solver.h"
 #include "query/query_compiler.hpp"
-#include "ranker/config/weights.hpp"
+#include "../config/weights.hpp"
 #include "ranker/dynamic/dynamic_ranker.hpp"
 #include "ranker/static/static_ranker.hpp"
 
