@@ -21,35 +21,22 @@ Index::PostingList* Index::getPostingList(const string& term){
 
 void Index::addPost(const std::string& term, char decoration, int docId){
     PostingList* pl = getPostingList(term);
-    
-    // Check if this is a new document for this term
-    bool isNewDocument = (pl->last_doc_id != docId);
-    
-    if (isNewDocument) {
-        // If we had a previous document, add EOD for it
-        if (pl->last_doc_id != -1) {
-            int delta = globalPositionCounter - pl->last_abs_pos;
-            pl->addPost(encodePost('%', delta));
-            pl->last_abs_pos = globalPositionCounter;
-            globalPositionCounter++;
-        }
-        
-        // Increment document count for this term
+
+    if (pl->last_doc_id != docId) {
         pl->num_docs++;
         pl->last_doc_id = docId;
     }
-    
-    // Add the content post
+
     int delta = globalPositionCounter - pl->last_abs_pos;
     pl->last_abs_pos = globalPositionCounter;
-    
+
     uint32_t encoded = encodePost(decoration, delta);
     pl->addPost(encoded);
-    
+
     if (decoration != '%') {
         pl->word_occurrences++;
     }
-    
+
     globalPositionCounter++;
 }
 
@@ -90,7 +77,16 @@ void Index::addDocument(const PageData& page){
     
     doc_data.word_count = uniqueWords.size();
     doc_data.end_position = globalPositionCounter;
-    
+
+    // Emit an EOD post for every term that appeared in this document. All EODs
+    // share the "one past the last word" slot, so we do not bump the counter.
+    for (const std::string& term : uniqueWords) {
+        PostingList* pl = getPostingList(term);
+        int delta = globalPositionCounter - pl->last_abs_pos;
+        pl->addPost(encodePost('%', delta));
+        pl->last_abs_pos = globalPositionCounter;
+    }
+
     documents.push_back(doc_data);
 }
 
@@ -109,16 +105,6 @@ int Index::GetDocumentFrequency(const string& term) const {
 }
 
 void Index::Finalize(){
-    // Add final EOD markers for all posting lists
-    for (auto it = dictionary.begin(); it != dictionary.end(); ++it) {
-        PostingList& pl = it->value;
-        if (pl.last_doc_id != -1) {
-            int delta = globalPositionCounter - pl.last_abs_pos;
-            pl.addPost(encodePost('%', delta));
-            pl.last_abs_pos = globalPositionCounter;
-            globalPositionCounter++;
-        }
-    }
     dictionary.Optimize(1.5);
 }
 
