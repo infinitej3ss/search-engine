@@ -157,7 +157,6 @@ private:
 
         // floor static score so distant/low-quality pages aren't
         // zeroed out when they're genuinely relevant
-        constexpr double STATIC_FLOOR = 0.15;
         s = std::max(s, STATIC_FLOOR);
 
         double d = score_dynamic(terms, cand, GENERAL, bm25_norm);
@@ -297,8 +296,6 @@ private:
                 median_bm25 = bm25_vals[bm25_vals.size() / 2];
             }
             // k controls sigmoid steepness — 0.1 gives a gentle curve
-            constexpr double SIGMOID_K = 0.1;
-
             for (auto& c : candidates) {
                 double bm25_norm = 1.0 / (1.0 + std::exp(-SIGMOID_K * (c.bm25_raw - median_bm25)));
                 double s = compute_score(terms, c.cand, bm25_norm);

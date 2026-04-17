@@ -81,29 +81,24 @@ inline double t1_metastream(
 
   auto url_tokens = tokenize_url(doc.url);
 
-  // field weights per lecture ordering (anchor omitted)
-  constexpr double W_URL    = 1.0;
-  constexpr double W_TITLE  = 0.8;
-  constexpr double W_BODY   = 0.3;
-
   double total = 0.0;
 
   for (const auto& term : query) {
     double best = 0.0;
 
     for (const auto& w : url_tokens) {
-      if (w == term) { best = W_URL; break; }
+      if (w == term) { best = W_FIELD_URL; break; }
     }
 
-    if (best < W_TITLE) {
+    if (best < W_FIELD_TITLE) {
       for (const auto& w : doc.title_words) {
-        if (to_lower(w) == term) { best = std::max(best, W_TITLE); break; }
+        if (to_lower(w) == term) { best = std::max(best, W_FIELD_TITLE); break; }
       }
     }
 
-    if (best < W_BODY) {
+    if (best < W_FIELD_BODY) {
       for (const auto& w : doc.body_words) {
-        if (to_lower(w) == term) { best = std::max(best, W_BODY); break; }
+        if (to_lower(w) == term) { best = std::max(best, W_FIELD_BODY); break; }
       }
     }
 
@@ -150,7 +145,7 @@ inline double t2_span(
 
   // title proximity weighted higher — a tight span in the title is
   // a stronger signal than in the body
-  return 0.7 * title_span + 0.3 * body_span;
+  return SPAN_TITLE_WEIGHT * title_span + (1.0 - SPAN_TITLE_WEIGHT) * body_span;
 }
 
 // t3 — light global quality signal from hop distance.
@@ -179,7 +174,7 @@ inline double content_quality_penalty(const DocCandidate& doc) {
   if (total_chars > 0 && non_latin > 0) {
     double non_latin_ratio = static_cast<double>(non_latin) / total_chars;
     // any non-latin in title is a strong signal; scale penalty with ratio
-    penalty *= std::max(0.2, 1.0 - non_latin_ratio * 2.0);
+    penalty *= std::max(NON_LATIN_FLOOR, 1.0 - non_latin_ratio * NON_LATIN_PENALTY_SCALE);
   }
 
   // keyword stuffing in title: cap max repetitions of any single term
@@ -191,7 +186,6 @@ inline double content_quality_penalty(const DocCandidate& doc) {
     for (const auto& [word, count] : title_freq)
       if (count > max_freq) max_freq = count;
 
-    constexpr int TITLE_MAX_REPEAT = 3;
     if (max_freq > TITLE_MAX_REPEAT) {
       penalty *= static_cast<double>(TITLE_MAX_REPEAT) / max_freq;
     }

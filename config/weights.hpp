@@ -24,6 +24,25 @@ inline WeightProfile NAVIGATIONAL = {0.0, 0.0, 0.0, 0.0};
 // 0.5 = equal weight, <0.5 = favor dynamic (relevance), >0.5 = favor static (quality)
 inline double COMBINE_ALPHA = 0.4;
 
+// static score floor — prevents low-quality urls from zeroing out relevant pages
+inline double STATIC_FLOOR = 0.15;
+
+// t1 metastream field weights (best-of per query term)
+inline double W_FIELD_URL   = 1.0;
+inline double W_FIELD_TITLE = 0.8;
+inline double W_FIELD_BODY  = 0.3;
+
+// t2 span title/body blend
+inline double SPAN_TITLE_WEIGHT = 0.7;
+
+// bm25 sigmoid normalization steepness
+inline double SIGMOID_K = 0.1;
+
+// content quality penalty thresholds
+inline int    TITLE_MAX_REPEAT = 3;
+inline double NON_LATIN_PENALTY_SCALE = 2.0;  // multiplied by non-latin ratio
+inline double NON_LATIN_FLOOR = 0.2;          // minimum penalty (max suppression)
+
 // Reads "key value" lines from `path` and assigns them to T1_WEIGHTS and the
 // profile globals. Blank and `#`-prefixed lines are skipped. Unknown keys and
 // parse errors warn on stderr but don't throw — a typo shouldn't kill the
@@ -65,6 +84,15 @@ inline bool load_and_apply_weights(const std::string& path) {
     else if (key == "profile.navigational.bm25")       NAVIGATIONAL.w_bm25       = value;
 
     else if (key == "combine_alpha")                   COMBINE_ALPHA             = value;
+    else if (key == "static_floor")                    STATIC_FLOOR              = value;
+    else if (key == "field.url")                       W_FIELD_URL               = value;
+    else if (key == "field.title")                     W_FIELD_TITLE             = value;
+    else if (key == "field.body")                      W_FIELD_BODY              = value;
+    else if (key == "span.title_weight")               SPAN_TITLE_WEIGHT         = value;
+    else if (key == "sigmoid_k")                       SIGMOID_K                 = value;
+    else if (key == "penalty.title_max_repeat")        TITLE_MAX_REPEAT          = static_cast<int>(value);
+    else if (key == "penalty.non_latin_scale")         NON_LATIN_PENALTY_SCALE   = value;
+    else if (key == "penalty.non_latin_floor")         NON_LATIN_FLOOR           = value;
 
     else std::cerr << "[weights] unknown key: " << key << "\n";
   }

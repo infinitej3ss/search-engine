@@ -1,8 +1,8 @@
-# Ranker weight overrides — edit and save; the running engine picks up
-# the new values on the next query. Lines starting with # and blank lines
-# are ignored. Unknown keys are warned about and skipped.
+# ranker weight overrides, edit and save; the running engine picks up
+# the new values on the next query. lines starting with # and blank lines
+# are ignored. unknown keys are warned about and skipped.
 
-# T1 — static URL-signal weights (src/ranker/static/static_ranker.hpp)
+# static url-signal weights
 tld                     2.0
 url_len                 0.3
 path_depth              0.3
@@ -11,8 +11,8 @@ ip_in_url               1.0
 special_char_density    2.0
 blacklist               1.0
 
-# Dynamic weight profiles (src/ranker/config/weight_profiles.hpp)
-# (metastream = T1 field matches, span = T2 proximity, quality = T3 global)
+# dynamic weight profiles
+# (metastream = T1 field matches, span = T2 proximity, quality = T3 hop, bm25 = T4)
 profile.general.metastream      0.25
 profile.general.span            0.25
 profile.general.quality         0.15
@@ -23,6 +23,25 @@ profile.navigational.span       0.10
 profile.navigational.quality    0.15
 profile.navigational.bm25       0.30
 
-# static^α × dynamic^(1-α) combination
-# 0.5 = equal weight, <0.5 favors relevance, >0.5 favors quality
+# combination
+# static^α × dynamic^(1-α). <0.5 favors relevance, >0.5 favors quality
 combine_alpha                   0.4
+static_floor                    0.15
+
+# t1 metastream field weights
+# per lecture: anchor > url > title > body (anchor omitted, no data)
+field.url                       1.0
+field.title                     0.8
+field.body                      0.3
+
+# t2 span
+# title/body blend (body weight = 1 - title weight)
+span.title_weight               0.7
+
+# bm25 sigmoid normalization
+sigmoid_k                       0.1
+
+# content quality penalties
+penalty.title_max_repeat        3
+penalty.non_latin_scale         2.0
+penalty.non_latin_floor         0.2

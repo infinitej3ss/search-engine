@@ -7,19 +7,35 @@ cmake --preset default
 cmake --build build
 ```
 
-Produces `build/engine`, `build/build_index`, and `build/tests`.
+Produces `build/search_server`, `build/engine`, `build/build_index`, and `build/tests`.
 
-### Run the search engine
+### Build the index from crawl data
 
-Crawler data lives in `data/`. From there:
+Crawler page files go in `data/` with the naming convention `crawled_page_rank_<R>_num_<N>`. Then:
 
 ```bash
 cd data
-../build/build_index      # builds index blobs from crawler files
-../build/engine           # starts the query prompt
+../build/build_index
 ```
 
-Type a query at the `>` prompt. Edit `weights.txt` between queries to retune — no rebuild needed.
+This produces `index_rank_<R>.blob` files (one per rank tier). The search server loads these automatically.
+
+### Run the search server
+
+```bash
+build/search_server 8080 ./frontend
+```
+
+Open `http://localhost:8080/index.html` in a browser. The server serves the frontend as static files and handles `/search?q=...` queries via the search plugin.
+
+### Run the standalone query engine (CLI)
+
+```bash
+cd data
+../build/engine
+```
+
+Type a query at the `>` prompt. Useful for quick testing without the browser.
 
 ### Run tests
 
