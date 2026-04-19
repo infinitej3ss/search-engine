@@ -35,6 +35,7 @@ private:
 
     // per-shard worker runs in its own thread.
     // streams results into the shared accumulator, honoring the stop flag.
+    // also merges the shard's trailing stats line into the shared SearchStats
     static void worker(ShardClient* client,
                        const std::string& query,
                        int shard_timeout_ms,
@@ -42,8 +43,9 @@ private:
                        std::vector<SearchResult>* out,
                        std::mutex* mtx,
                        std::atomic<int>* good_count,
-                       std::atomic<bool>* stop_flag) {
-        auto callback = [&](const SearchResult& r) -> bool {
+                       std::atomic<bool>* stop_flag,
+                       SearchStats* agg_stats) {
+        auto on_result = [&](const SearchResult& r) -> bool {
             if (stop_flag->load()) return false;
 
             {
@@ -57,7 +59,13 @@ private:
             return !stop_flag->load();
         };
 
-        client->stream_query(query, shard_timeout_ms, callback);
+        auto on_stats = [&](const SearchStats& s) {
+            if (!agg_stats) return;
+            std::lock_guard<std::mutex> lock(*mtx);
+            agg_stats->merge(s);
+        };
+
+        client->stream_query(query, shard_timeout_ms, on_result, on_stats);
     }
 
 public:
@@ -118,7 +126,8 @@ public:
 
     bool has_shards() const { return !shards.empty(); }
 
-    std::vector<SearchResult> search(const std::string& query_str) {
+    std::vector<SearchResult> search(const std::string& query_str,
+                                      SearchStats* stats = nullptr) {
         std::vector<SearchResult> all_results;
         std::mutex mtx;
         std::atomic<int> good_count(0);
@@ -131,7 +140,8 @@ public:
             threads.emplace_back(worker,
                 &shard, std::cref(query_str),
                 shard_timeout_ms, good_threshold,
-                &all_results, &mtx, &good_count, &stop_flag);
+                &all_results, &mtx, &good_count, &stop_flag,
+                stats);
         }
 
         // watcher: signal stop when we have enough good results OR

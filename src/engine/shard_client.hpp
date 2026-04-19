@@ -85,42 +85,76 @@ private:
         return sent == static_cast<ssize_t>(req.size());
     }
 
-    // minimal json parser for one ndjson line
+    // minimal json extractors. scan the line for "key":value shape
+    static int extract_int(const std::string& line, const std::string& key) {
+        std::string needle = "\"" + key + "\":";
+        size_t pos = line.find(needle);
+        if (pos == std::string::npos) return 0;
+        return std::stoi(line.substr(pos + needle.size()));
+    }
+
+    static double extract_double(const std::string& line, const std::string& key) {
+        std::string needle = "\"" + key + "\":";
+        size_t pos = line.find(needle);
+        if (pos == std::string::npos) return 0.0;
+        return std::stod(line.substr(pos + needle.size()));
+    }
+
+    static std::string extract_string(const std::string& line, const std::string& key) {
+        std::string needle = "\"" + key + "\":\"";
+        size_t pos = line.find(needle);
+        if (pos == std::string::npos) return "";
+        size_t start = pos + needle.size();
+        size_t end = line.find('"', start);
+        if (end == std::string::npos) return "";
+        return line.substr(start, end - start);
+    }
+
+    // parse a bracketed int array: "key":[1,2,3]
+    static std::vector<int> extract_int_array(const std::string& line,
+                                               const std::string& key) {
+        std::vector<int> out;
+        std::string needle = "\"" + key + "\":[";
+        size_t pos = line.find(needle);
+        if (pos == std::string::npos) return out;
+        size_t start = pos + needle.size();
+        size_t end = line.find(']', start);
+        if (end == std::string::npos) return out;
+        std::string body = line.substr(start, end - start);
+        size_t i = 0;
+        while (i < body.size()) {
+            size_t comma = body.find(',', i);
+            std::string tok = body.substr(i, comma == std::string::npos ? std::string::npos : comma - i);
+            if (!tok.empty()) {
+                try { out.push_back(std::stoi(tok)); } catch (...) {}
+            }
+            if (comma == std::string::npos) break;
+            i = comma + 1;
+        }
+        return out;
+    }
+
     bool parse_result_line(const std::string& line, SearchResult& result) {
         if (line.empty() || line[0] != '{') return false;
 
-        auto extract_int = [&](const std::string& key) -> int {
-            std::string needle = "\"" + key + "\":";
-            size_t pos = line.find(needle);
-            if (pos == std::string::npos) return 0;
-            return std::stoi(line.substr(pos + needle.size()));
-        };
+        result.doc_id         = extract_int(line, "doc_id");
+        result.url            = extract_string(line, "url");
+        result.title          = extract_string(line, "title");
+        result.snippet        = extract_string(line, "snippet");
+        result.static_score   = extract_double(line, "static_score");
+        result.dynamic_score  = extract_double(line, "dynamic_score");
+        result.combined_score = extract_double(line, "combined_score");
+        result.t1             = extract_double(line, "t1");
+        result.t2             = extract_double(line, "t2");
+        result.t3             = extract_double(line, "t3");
+        result.bm25           = extract_double(line, "bm25");
+        return true;
+    }
 
-        auto extract_double = [&](const std::string& key) -> double {
-            std::string needle = "\"" + key + "\":";
-            size_t pos = line.find(needle);
-            if (pos == std::string::npos) return 0.0;
-            return std::stod(line.substr(pos + needle.size()));
-        };
-
-        auto extract_string = [&](const std::string& key) -> std::string {
-            std::string needle = "\"" + key + "\":\"";
-            size_t pos = line.find(needle);
-            if (pos == std::string::npos) return "";
-            size_t start = pos + needle.size();
-            size_t end = line.find('"', start);
-            if (end == std::string::npos) return "";
-            return line.substr(start, end - start);
-        };
-
-        result.doc_id        = extract_int("doc_id");
-        result.url           = extract_string("url");
-        result.title         = extract_string("title");
-        result.snippet       = extract_string("snippet");
-        result.static_score  = extract_double("static_score");
-        result.dynamic_score = extract_double("dynamic_score");
-        result.combined_score = extract_double("combined_score");
-
+    static bool parse_stats_line(const std::string& line, SearchStats& stats) {
+        stats.constraint_solved   = extract_int(line, "constraint_solved");
+        stats.passed_static_floor = extract_int(line, "passed_static_floor");
+        stats.per_rank_matched    = extract_int_array(line, "per_rank_matched");
         return true;
     }
 
@@ -129,12 +163,17 @@ public:
 
     // callback is invoked for each result as it arrives.
     // returning false from the callback means "stop — close the socket."
-    // returns the number of results delivered.
+    // returns the number of results delivered
     using ResultCallback = std::function<bool(const SearchResult&)>;
+
+    // optional second callback: invoked at most once per query, when the
+    // shard emits its trailing "_type":"stats" ndjson line
+    using StatsCallback = std::function<void(const SearchStats&)>;
 
     int stream_query(const std::string& query_str,
                      int recv_timeout_ms,
-                     const ResultCallback& on_result) {
+                     const ResultCallback& on_result,
+                     const StatsCallback& on_stats = nullptr) {
         int fd = connect_to_shard(recv_timeout_ms);
         if (fd < 0) return 0;
 
@@ -177,6 +216,17 @@ public:
 
                 std::string line = buffer.substr(0, nl);
                 buffer.erase(0, nl + 1);
+
+                // stats line arrives after the last result; result lines
+                // have a doc_id, stats lines carry "_type":"stats"
+                if (line.find("\"_type\":\"stats\"") != std::string::npos) {
+                    if (on_stats) {
+                        SearchStats s;
+                        parse_stats_line(line, s);
+                        on_stats(s);
+                    }
+                    continue;
+                }
 
                 SearchResult r;
                 if (parse_result_line(line, r)) {

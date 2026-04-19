@@ -68,14 +68,32 @@ static std::string json_escape(const std::string& s) {
 
 static std::string results_to_json(const std::string& query,
                                     const std::vector<SearchResult>& results,
-                                    int total, int offset, double took_ms) {
+                                    int total, int offset, double took_ms,
+                                    const SearchStats& stats) {
     std::ostringstream json;
     json << "{\"query\":\"" << json_escape(query) << "\","
          << "\"total\":" << total << ","
          << "\"offset\":" << offset << ","
-         << "\"took_ms\":" << took_ms << ","
-         << "\"results\":[";
+         << "\"took_ms\":" << took_ms << ",";
 
+    // per-query diagnostics for the sidebar widgets
+    json << "\"stats\":{";
+    json << "\"parsed_tokens\":[";
+    for (size_t i = 0; i < stats.parsed_tokens.size(); i++) {
+        if (i > 0) json << ",";
+        json << "\"" << json_escape(stats.parsed_tokens[i]) << "\"";
+    }
+    json << "],";
+    json << "\"constraint_solved\":" << stats.constraint_solved << ",";
+    json << "\"passed_static_floor\":" << stats.passed_static_floor << ",";
+    json << "\"per_rank_matched\":[";
+    for (size_t i = 0; i < stats.per_rank_matched.size(); i++) {
+        if (i > 0) json << ",";
+        json << stats.per_rank_matched[i];
+    }
+    json << "]},";
+
+    json << "\"results\":[";
     for (size_t i = 0; i < results.size(); i++) {
         if (i > 0) json << ",";
         const auto& r = results[i];
@@ -86,6 +104,10 @@ static std::string results_to_json(const std::string& query,
              << ",\"static_score\":" << r.static_score
              << ",\"dynamic_score\":" << r.dynamic_score
              << ",\"combined_score\":" << r.combined_score
+             << ",\"t1\":" << r.t1
+             << ",\"t2\":" << r.t2
+             << ",\"t3\":" << r.t3
+             << ",\"bm25\":" << r.bm25
              << "}";
     }
 
@@ -127,15 +149,16 @@ public:
         int limit = get_int_param(request, "limit", 10);
 
         int total = 0;
+        SearchStats stats;
         auto start = std::chrono::steady_clock::now();
-        auto results = engine.search(query_str, offset, limit, &total);
+        auto results = engine.search(query_str, offset, limit, &total, &stats);
         double took_ms = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - start).count();
 
         std::fprintf(stderr, "[search] q=%.80s offset=%d total=%d took=%.1fms\n",
                      query_str.c_str(), offset, total, took_ms);
 
-        return results_to_json(query_str, results, total, offset, took_ms);
+        return results_to_json(query_str, results, total, offset, took_ms, stats);
     }
 };
 

@@ -77,7 +77,27 @@ static std::string result_to_line(const SearchResult& r) {
          << ",\"static_score\":" << r.static_score
          << ",\"dynamic_score\":" << r.dynamic_score
          << ",\"combined_score\":" << r.combined_score
+         << ",\"t1\":" << r.t1
+         << ",\"t2\":" << r.t2
+         << ",\"t3\":" << r.t3
+         << ",\"bm25\":" << r.bm25
          << "}\n";
+    return json.str();
+}
+
+// emit one additional ndjson line at the end of the stream carrying this
+// shard's SearchStats. leader distinguishes it by the "_type":"stats" marker
+static std::string stats_to_line(const SearchStats& s) {
+    std::ostringstream json;
+    json << "{\"_type\":\"stats\""
+         << ",\"constraint_solved\":" << s.constraint_solved
+         << ",\"passed_static_floor\":" << s.passed_static_floor
+         << ",\"per_rank_matched\":[";
+    for (size_t i = 0; i < s.per_rank_matched.size(); i++) {
+        if (i > 0) json << ",";
+        json << s.per_rank_matched[i];
+    }
+    json << "]}\n";
     return json.str();
 }
 
@@ -140,11 +160,15 @@ public:
         int total_sent = 0;
         int good_sent = 0;
 
+        SearchStats stats;
+        stats.parsed_tokens = terms;
+        stats.per_rank_matched.assign(engine.num_levels(), 0);
+
         // iterate levels from highest quality (0) to lowest.
         // after each level, check whether we've hit the good-results threshold.
-        // if the leader disconnected mid-stream, bail immediately.
+        // if the leader disconnected mid-stream, bail immediately
         for (size_t level = 0; level < engine.num_levels(); level++) {
-            auto level_results = engine.search_level(terms, level);
+            auto level_results = engine.search_level(terms, level, &stats);
 
             int level_sent = 0;
             for (const auto& r : level_results) {
@@ -173,6 +197,10 @@ public:
                 break;
             }
         }
+
+        // best-effort: emit stats. if leader already closed the socket,
+        // write_all returns false and we just let it drop
+        write_all(talkFD, stats_to_line(stats));
 
         std::cerr << "[shard] done: " << total_sent << " results for \""
                   << query_str << "\"" << std::endl;

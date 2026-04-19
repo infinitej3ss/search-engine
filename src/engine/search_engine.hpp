@@ -263,12 +263,15 @@ public:
     // global corpus normalization across ranks, which is fine because the
     // per-level pools are disjoint anyway.
     std::vector<SearchResult> search_level(const std::vector<std::string>& terms,
-                                            size_t level) {
+                                            size_t level,
+                                            SearchStats* stats = nullptr) {
         std::vector<SearchResult> results;
         if (level >= indexes.size()) return results;
 
         ConstraintSolver solver(indexes[level].get());
         auto doc_ids = solver.FindAndQuery(terms);
+
+        if (stats) stats->constraint_solved += static_cast<int>(doc_ids.size());
 
         int n_docs = indexes[level]->GetDocumentCount();
         double avg_len = (level < avg_doc_lengths.size()) ? avg_doc_lengths[level] : 500.0;
@@ -331,7 +334,20 @@ public:
 
             std::string title = join_title(c.meta.title_words);
             // snippet deferred to post-pagination (see SearchEngine::search)
-            results.push_back({c.doc_id, c.meta.url, title, "", ss, ds, s});
+            SearchResult sr{c.doc_id, c.meta.url, title, "", ss, ds, s};
+            // per-signal breakdown (cheap: these are already-computed primitives)
+            sr.t1 = t1_metastream(terms, c.cand);
+            sr.t2 = t2_span(terms, c.cand);
+            sr.t3 = t3_quality(c.cand);
+            sr.bm25 = bm25_norm;
+            results.push_back(std::move(sr));
+
+            if (stats) {
+                stats->passed_static_floor++;
+                if (level < stats->per_rank_matched.size()) {
+                    stats->per_rank_matched[level]++;
+                }
+            }
         }
 
         std::sort(results.begin(), results.end(),
@@ -345,13 +361,14 @@ public:
     size_t num_levels() const { return indexes.size(); }
 
 private:
-    std::vector<SearchResult> search_distributed(const std::vector<std::string>& terms) {
+    std::vector<SearchResult> search_distributed(const std::vector<std::string>& terms,
+                                                  SearchStats* stats = nullptr) {
         std::string query_str;
         for (size_t i = 0; i < terms.size(); i++) {
             if (i > 0) query_str += " ";
             query_str += terms[i];
         }
-        return distributor->search(query_str);
+        return distributor->search(query_str, stats);
     }
 
 public:
@@ -407,11 +424,16 @@ public:
     }
 
     // main entry point. takes raw user query, compiles it, searches
-    // offset/limit for pagination. returns the page and total result count
+    // offset/limit for pagination. returns the page and total result count.
+    // `stats` is optional; if provided it's filled with per-query diagnostics
+    // (funnel, per-rank counts, parsed tokens) for the debug widgets
     std::vector<SearchResult> search(const std::string& raw_query,
                                       int offset = 0, int limit = 10,
-                                      int* total_out = nullptr) {
+                                      int* total_out = nullptr,
+                                      SearchStats* stats = nullptr) {
         auto terms = query::compile(raw_query);
+        if (stats) stats->parsed_tokens = terms;
+
         if (terms.empty()) {
             if (total_out) *total_out = 0;
             return {};
@@ -421,19 +443,21 @@ public:
 
         // distributed path: shards generated their own snippets already
         if (distributor) {
-            auto all = search_distributed(terms);
+            auto all = search_distributed(terms, stats);
             if (total_out) *total_out = static_cast<int>(all.size());
             if (offset >= static_cast<int>(all.size())) return {};
             int end = std::min(offset + limit, static_cast<int>(all.size()));
             return std::vector<SearchResult>(all.begin() + offset, all.begin() + end);
         }
 
+        if (stats) stats->per_rank_matched.assign(indexes.size(), 0);
+
         // local path: collect level-tagged results so we can fetch snippets
         // only for the paginated slice (each snippet is a disk read)
         struct Tagged { SearchResult result; size_t level; };
         std::vector<Tagged> tagged;
         for (size_t r = 0; r < indexes.size(); r++) {
-            auto level_results = search_level(terms, r);
+            auto level_results = search_level(terms, r, stats);
             for (auto& res : level_results) tagged.push_back({std::move(res), r});
         }
         std::sort(tagged.begin(), tagged.end(),
