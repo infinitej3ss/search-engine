@@ -10,6 +10,13 @@ struct PageData {
     u_int64_t distance_from_seedlist;
     std::string url;
     std::vector<std::string> words, titlewords, anchor_text;
+
+    // locator fields: populated by the indexer at iteration time, not written
+    // to the page file itself. used to look up this page's raw data later via
+    // get_page_data_from_index (for snippet generation at query time)
+    u_int64_t page_file_rank = 0;
+    u_int64_t page_file_num = 0;
+    u_int64_t page_file_index = 0;
 };
 
 // a page file consists of a page_file_header followed by num_pages page_data entries

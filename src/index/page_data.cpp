@@ -291,7 +291,7 @@ std::vector<std::string> deserialize_string_vector(void** buffer) {
 // find rank of a given page file name
 //
 // returns __INT64_MAX__ if the page is invalid
-u_int64_t get_page_file_rank(std::string& file_name) {
+u_int64_t get_page_file_rank(const std::string& file_name) {
     if (file_name.length() < std::string("crawled_page_data_rank_x").length()) {
         return __INT64_MAX__;
     }
@@ -315,7 +315,7 @@ u_int64_t get_page_file_rank(std::string& file_name) {
 // find num of a given page file name
 //
 // returns __INT64_MAX__ if the page is invalid
-u_int64_t get_page_file_num(std::string& file_name) {
+u_int64_t get_page_file_num(const std::string& file_name) {
     if (file_name.length() < std::string("crawled_page_data_rank_x").length()) {
         return __INT64_MAX__;
     }
@@ -417,8 +417,11 @@ int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64
         return -1;
     }
 
-    // index to file
-    CURRENT_PAGE_FILE_LOCATION = (u_int8_t*)CURRENT_PAGE_FILE_LOCATION + index;
+    // `index` is the offset returned by get_next_page, measured from the
+    // start of the file (including the PageFileHeader). load_page_file has
+    // already advanced CURRENT_PAGE_FILE_LOCATION past the header, so we set
+    // it absolutely rather than add
+    CURRENT_PAGE_FILE_LOCATION = (u_int8_t*)MAPPED_PAGE_FILE + index;
 
     // load data
     //PageData pd;

@@ -6,7 +6,9 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <cstdio>
 #include <cstdlib>
+#include <chrono>
 
 #include "../src/engine/search_engine.hpp"
 
@@ -66,11 +68,12 @@ static std::string json_escape(const std::string& s) {
 
 static std::string results_to_json(const std::string& query,
                                     const std::vector<SearchResult>& results,
-                                    int total, int offset) {
+                                    int total, int offset, double took_ms) {
     std::ostringstream json;
     json << "{\"query\":\"" << json_escape(query) << "\","
          << "\"total\":" << total << ","
          << "\"offset\":" << offset << ","
+         << "\"took_ms\":" << took_ms << ","
          << "\"results\":[";
 
     for (size_t i = 0; i < results.size(); i++) {
@@ -124,8 +127,15 @@ public:
         int limit = get_int_param(request, "limit", 10);
 
         int total = 0;
+        auto start = std::chrono::steady_clock::now();
         auto results = engine.search(query_str, offset, limit, &total);
-        return results_to_json(query_str, results, total, offset);
+        double took_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - start).count();
+
+        std::fprintf(stderr, "[search] q=%.80s offset=%d total=%d took=%.1fms\n",
+                     query_str.c_str(), offset, total, took_ms);
+
+        return results_to_json(query_str, results, total, offset, took_ms);
     }
 };
 

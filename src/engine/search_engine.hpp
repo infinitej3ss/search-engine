@@ -30,6 +30,7 @@ private:
     std::vector<std::unique_ptr<Index>> indexes;
     std::vector<double> avg_doc_lengths; // per-index average body word count
     std::string weights_path;
+    std::string data_dir;  // directory holding blobs + crawled page files
 
     // distributed mode
     QueryDistributor* distributor = nullptr;
@@ -43,6 +44,68 @@ private:
         d.body_length = meta.body_length;
         // body_tf / body_positions are filled in per-query by the caller
         return d;
+    }
+
+    static std::string ensure_trailing_slash(const std::string& p) {
+        if (p.empty() || p.back() == '/') return p;
+        return p + "/";
+    }
+
+    // build a snippet by fetching the raw page from its crawler file and
+    // centering a window around the first query-term hit. called per result
+    // on the paginated page only, not per candidate
+    std::string fetch_snippet(const std::vector<std::string>& terms,
+                              const Index::DocumentMetadata& meta) const {
+        if (terms.empty() || data_dir.empty()) return "";
+
+        PageData pd;
+        if (get_page_data_from_index(pd, data_dir,
+                                     meta.page_file_rank,
+                                     meta.page_file_num,
+                                     meta.page_file_index) != 0) {
+            return "";
+        }
+        if (pd.words.empty()) return "";
+
+        constexpr int WINDOW = 20;
+        constexpr size_t MAX_WORD_LEN = 30;
+        constexpr size_t MAX_SNIPPET_LEN = 200;
+
+        auto is_clean = [](const std::string& w) {
+            return w.size() <= 40 && w.find('{') == std::string::npos
+                                  && w.find('<') == std::string::npos;
+        };
+
+        // find the first clean occurrence of any query term (case-insensitive)
+        int best_pos = -1;
+        for (size_t j = 0; j < pd.words.size() && best_pos < 0; j++) {
+            if (!is_clean(pd.words[j])) continue;
+            std::string lower;
+            lower.reserve(pd.words[j].size());
+            for (char c : pd.words[j])
+                lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            for (const auto& t : terms) {
+                if (lower == t) { best_pos = static_cast<int>(j); break; }
+            }
+        }
+        if (best_pos < 0) best_pos = 0;
+
+        int start = std::max(0, best_pos - WINDOW / 2);
+        int end = std::min(static_cast<int>(pd.words.size()), start + WINDOW);
+
+        std::string snippet;
+        if (start > 0) snippet += "... ";
+        for (int i = start; i < end; i++) {
+            if (!is_clean(pd.words[i])) continue;
+            if (!snippet.empty() && snippet.back() != ' ') snippet += " ";
+            const auto& w = pd.words[i];
+            if (w.size() > MAX_WORD_LEN) snippet += w.substr(0, MAX_WORD_LEN) + "...";
+            else                         snippet += w;
+            if (snippet.size() >= MAX_SNIPPET_LEN) break;
+        }
+        if (end < static_cast<int>(pd.words.size())) snippet += " ...";
+
+        return decode_html_entities(snippet);
     }
 
     // decode common html entities in a string
@@ -267,12 +330,8 @@ public:
             double ds = score_dynamic(terms, c.cand, GENERAL, bm25_norm);
 
             std::string title = join_title(c.meta.title_words);
-            // TODO(crawler-team): wire up their snippet mechanism. until then,
-            // we don't have body text to summarize from since the index no
-            // longer stores it
-            std::string snippet;
-
-            results.push_back({c.doc_id, c.meta.url, title, snippet, ss, ds, s});
+            // snippet deferred to post-pagination (see SearchEngine::search)
+            results.push_back({c.doc_id, c.meta.url, title, "", ss, ds, s});
         }
 
         std::sort(results.begin(), results.end(),
@@ -286,24 +345,6 @@ public:
     size_t num_levels() const { return indexes.size(); }
 
 private:
-    // local (non-distributed) search across all levels
-    std::vector<SearchResult> search_local(const std::vector<std::string>& terms) {
-        std::vector<SearchResult> results;
-
-        for (size_t r = 0; r < indexes.size(); r++) {
-            auto level_results = search_level(terms, r);
-            results.insert(results.end(), level_results.begin(), level_results.end());
-        }
-
-        // sort by rank bucket (implicit from order), then score
-        std::sort(results.begin(), results.end(),
-            [](const SearchResult& a, const SearchResult& b) {
-                return a.combined_score > b.combined_score;
-            });
-
-        return results;
-    }
-
     std::vector<SearchResult> search_distributed(const std::vector<std::string>& terms) {
         std::string query_str;
         for (size_t i = 0; i < terms.size(); i++) {
@@ -316,16 +357,16 @@ private:
 public:
     // local mode: load blobs from data_dir, fall back to demo corpus
     SearchEngine(const std::string& weights_file,
-                 const std::string& data_dir = ".")
-        : weights_path(weights_file) {
+                 const std::string& data_dir_ = ".")
+        : weights_path(weights_file), data_dir(ensure_trailing_slash(data_dir_)) {
 
         if (!load_and_apply_weights(weights_path)) {
             std::cerr << "[engine] warning: could not load " << weights_path
                       << ", all weights are zero" << std::endl;
         }
 
-        if (load_rank_blobs(data_dir) == 0) {
-            std::cerr << "[engine] no index blobs found in " << data_dir
+        if (load_rank_blobs(data_dir_) == 0) {
+            std::cerr << "[engine] no index blobs found in " << data_dir_
                       << ", using demo corpus" << std::endl;
             load_demo_corpus();
         }
@@ -340,9 +381,9 @@ public:
 
     // distributed mode
     SearchEngine(const std::string& weights_file,
-                 const std::string& data_dir,
+                 const std::string& data_dir_,
                  const std::string& shards_config)
-        : weights_path(weights_file) {
+        : weights_path(weights_file), data_dir(ensure_trailing_slash(data_dir_)) {
 
         if (!load_and_apply_weights(weights_path)) {
             std::cerr << "[engine] warning: could not load " << weights_path << std::endl;
@@ -355,7 +396,7 @@ public:
             delete distributor;
             distributor = nullptr;
 
-            if (load_rank_blobs(data_dir) == 0) load_demo_corpus();
+            if (load_rank_blobs(data_dir_) == 0) load_demo_corpus();
         } else {
             std::cerr << "[engine] running in distributed mode" << std::endl;
         }
@@ -365,8 +406,8 @@ public:
         delete distributor;
     }
 
-    // main entry point. takes raw user query, compiles it, searches.
-    // offset/limit for pagination. returns the page and total result count.
+    // main entry point. takes raw user query, compiles it, searches
+    // offset/limit for pagination. returns the page and total result count
     std::vector<SearchResult> search(const std::string& raw_query,
                                       int offset = 0, int limit = 10,
                                       int* total_out = nullptr) {
@@ -378,13 +419,39 @@ public:
 
         load_and_apply_weights(weights_path);
 
-        auto all = distributor ? search_distributed(terms) : search_local(terms);
+        // distributed path: shards generated their own snippets already
+        if (distributor) {
+            auto all = search_distributed(terms);
+            if (total_out) *total_out = static_cast<int>(all.size());
+            if (offset >= static_cast<int>(all.size())) return {};
+            int end = std::min(offset + limit, static_cast<int>(all.size()));
+            return std::vector<SearchResult>(all.begin() + offset, all.begin() + end);
+        }
 
-        if (total_out) *total_out = static_cast<int>(all.size());
+        // local path: collect level-tagged results so we can fetch snippets
+        // only for the paginated slice (each snippet is a disk read)
+        struct Tagged { SearchResult result; size_t level; };
+        std::vector<Tagged> tagged;
+        for (size_t r = 0; r < indexes.size(); r++) {
+            auto level_results = search_level(terms, r);
+            for (auto& res : level_results) tagged.push_back({std::move(res), r});
+        }
+        std::sort(tagged.begin(), tagged.end(),
+            [](const Tagged& a, const Tagged& b) {
+                return a.result.combined_score > b.result.combined_score;
+            });
 
-        // slice for pagination
-        if (offset >= static_cast<int>(all.size())) return {};
-        int end = std::min(offset + limit, static_cast<int>(all.size()));
-        return std::vector<SearchResult>(all.begin() + offset, all.begin() + end);
+        if (total_out) *total_out = static_cast<int>(tagged.size());
+        if (offset >= static_cast<int>(tagged.size())) return {};
+        int end = std::min(offset + limit, static_cast<int>(tagged.size()));
+
+        std::vector<SearchResult> page;
+        page.reserve(end - offset);
+        for (int i = offset; i < end; i++) {
+            auto meta = indexes[tagged[i].level]->GetDocumentMetadata(tagged[i].result.doc_id);
+            tagged[i].result.snippet = fetch_snippet(terms, meta);
+            page.push_back(std::move(tagged[i].result));
+        }
+        return page;
     }
 };

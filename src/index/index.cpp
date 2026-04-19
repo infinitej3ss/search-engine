@@ -73,6 +73,9 @@ void Index::addDocument(const PageData& page) {
     doc_data.title_words = page.titlewords;
     doc_data.hop_distance = static_cast<int>(page.distance_from_seedlist);
     doc_data.body_length = (int)page.words.size();
+    doc_data.page_file_rank = page.page_file_rank;
+    doc_data.page_file_num = page.page_file_num;
+    doc_data.page_file_index = page.page_file_index;
     doc_data.start_position = globalPositionCounter;
 
     std::vector<std::string> urlParts = splitURL(page.url);
@@ -236,7 +239,7 @@ void Index::Finalize(){
 // layout rather than mmap-optimized structure.
 namespace {
 constexpr uint64_t BLOB_MAGIC   = 0x494E444558424C42ULL;  // "INDEXBLB"
-constexpr uint64_t BLOB_VERSION = 2;
+constexpr uint64_t BLOB_VERSION = 3;
 
 template <typename T>
 void write_pod(std::ostream& o, const T& v) {
@@ -311,6 +314,9 @@ bool Index::WriteBlob(const std::string& path) const {
         write_pod(o, static_cast<int32_t>(d.body_length));
         write_pod(o, static_cast<int32_t>(d.start_position));
         write_pod(o, static_cast<int32_t>(d.end_position));
+        write_pod(o, d.page_file_rank);
+        write_pod(o, d.page_file_num);
+        write_pod(o, d.page_file_index);
     }
 
     // dictionary — count first (iterate once to count, again to write)
@@ -361,6 +367,9 @@ bool Index::LoadBlob(const std::string& path) {
         if (!read_pod(i, v)) return false; d.body_length = v;
         if (!read_pod(i, v)) return false; d.start_position = v;
         if (!read_pod(i, v)) return false; d.end_position = v;
+        if (!read_pod(i, d.page_file_rank)) return false;
+        if (!read_pod(i, d.page_file_num)) return false;
+        if (!read_pod(i, d.page_file_index)) return false;
         documents.push_back(std::move(d));
     }
 
@@ -404,7 +413,11 @@ Index* BuildIndex(){
             foundFile = true;
             PageData page;
 
-            while (get_next_page(page) != -1){
+            int page_index;
+            while ((page_index = get_next_page(page)) != -1) {
+                page.page_file_rank = (u_int64_t)rank;
+                page.page_file_num = (u_int64_t)fileNum;
+                page.page_file_index = (u_int64_t)page_index;
                 index->addDocument(page);
             }
 

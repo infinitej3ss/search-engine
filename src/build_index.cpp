@@ -33,8 +33,14 @@ int main() {
         for (auto filename : file_names[rank]) {
             if (load_page_file(filename) != 0) continue;
 
+            u_int64_t file_num = get_page_file_num(filename);
+
             PageData page;
-            while (get_next_page(page) != -1) {
+            int page_index;
+            while ((page_index = get_next_page(page)) != -1) {
+                page.page_file_rank = (u_int64_t)rank;
+                page.page_file_num = file_num;
+                page.page_file_index = (u_int64_t)page_index;
                 idx.addDocument(page);
                 rank_docs++;
             }

@@ -26,8 +26,12 @@ function render(data) {
     const summary = document.createElement("p");
     const start = data.offset + 1;
     const end = data.offset + data.results.length;
-    summary.textContent = "showing " + start + "-" + end
+    let text = "showing " + start + "-" + end
         + " of " + data.total + " result(s) for \"" + data.query + "\"";
+    if (typeof data.took_ms === "number") {
+        text += "  (" + data.took_ms.toFixed(0) + " ms)";
+    }
+    summary.textContent = text;
     resultsDiv.appendChild(summary);
 
     if (data.results.length === 0) return;

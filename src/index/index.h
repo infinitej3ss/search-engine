@@ -122,6 +122,10 @@ class Index{
             int body_length = 0;                    // raw body word count (for BM25 avg/tf)
             int start_position = 0;
             int end_position = 0;
+            // locator for fetching raw page data at query time (snippet gen)
+            u_int64_t page_file_rank = 0;
+            u_int64_t page_file_num = 0;
+            u_int64_t page_file_index = 0;
         };
 
         Index();
