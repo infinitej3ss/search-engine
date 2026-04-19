@@ -352,6 +352,9 @@ void *Talk( void *talkSocket )
     size_t qmark = filePath.find('?');
     if (qmark != string::npos)
         filePath = filePath.substr(0, qmark);
+    // map bare "/" to "/index.html" so the root URL serves the landing page
+    // rather than returning 403 for the directory
+    if (filePath == "/" || filePath.empty()) filePath = "/index.html";
     string fullPath = RootDirectory + filePath;
 
     // 3 & 4. Check for plugin and if it intercepts this path

@@ -16,7 +16,6 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
-#include <condition_variable>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -44,7 +43,8 @@ private:
                        std::mutex* mtx,
                        std::atomic<int>* good_count,
                        std::atomic<bool>* stop_flag,
-                       SearchStats* agg_stats) {
+                       SearchStats* agg_stats,
+                       std::atomic<int>* alive_workers) {
         auto on_result = [&](const SearchResult& r) -> bool {
             if (stop_flag->load()) return false;
 
@@ -66,6 +66,7 @@ private:
         };
 
         client->stream_query(query, shard_timeout_ms, on_result, on_stats);
+        alive_workers->fetch_sub(1);
     }
 
 public:
@@ -132,6 +133,7 @@ public:
         std::mutex mtx;
         std::atomic<int> good_count(0);
         std::atomic<bool> stop_flag(false);
+        std::atomic<int> alive_workers(static_cast<int>(shards.size()));
 
         // launch one worker per shard
         std::vector<std::thread> threads;
@@ -141,11 +143,11 @@ public:
                 &shard, std::cref(query_str),
                 shard_timeout_ms, good_threshold,
                 &all_results, &mtx, &good_count, &stop_flag,
-                stats);
+                stats, &alive_workers);
         }
 
         // watcher: signal stop when we have enough good results OR
-        // when the global deadline passes. polls every few ms.
+        // when every shard has finished OR when the global deadline passes
         auto deadline = std::chrono::steady_clock::now()
                       + std::chrono::milliseconds(global_timeout_ms);
 
@@ -154,20 +156,8 @@ public:
                 stop_flag.store(true);
                 break;
             }
-
-            // also exit early if all threads have finished
-            bool any_alive = false;
-            for (auto& t : threads) {
-                if (t.joinable()) {
-                    // joinable just means not yet joined — can't check liveness
-                    // without joining. use a short sleep instead.
-                    any_alive = true;
-                    break;
-                }
-            }
-            if (!any_alive) break;
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (alive_workers.load() == 0) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
 
         // deadline reached (or early stop signaled). tell workers to stop.
