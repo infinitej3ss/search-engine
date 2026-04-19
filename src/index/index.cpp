@@ -1,6 +1,7 @@
 #include "index.h"
 #include "Common.h"
 #include "page_data.h"
+#include <cctype>
 #include <iostream>
 #include <fstream>
 #include <set>
@@ -8,8 +9,23 @@
 
 using namespace std;
 
-//constructor
-Index::Index() : dictionary(CompareEqual, str_hash, 1024), globalPositionCounter(0) {}
+namespace {
+// one seek checkpoint every N posts per posting list
+// tunable: lower means faster Seek at the cost of more per-list metadata
+// tests/test_index_seek_checkpoints.cpp pins the same value, keep them in sync
+constexpr size_t CHECKPOINT_STRIDE = 128;
+
+// case-fold a token for dictionary storage. query compiler always lowercases,
+// so dictionary keys must match
+std::string fold(std::string s) {
+    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+}  // namespace
+
+// starts with a generous bucket count because Optimize only runs in Finalize/LoadBlob
+// during build, every insertion hits a chain, so under-sized = slow build
+Index::Index() : dictionary(CompareEqual, str_hash, 1 << 20), globalPositionCounter(0) {}
 
 Index::~Index() {}
 
@@ -35,6 +51,10 @@ void Index::addPost(const std::string& term, char decoration, int docId){
     uint32_t encoded = encodePost(decoration, delta);
     pl->addPost(encoded);
 
+    if (pl->posts.size() % CHECKPOINT_STRIDE == 0) {
+        pl->addCheckpoint(pl->last_abs_pos);
+    }
+
     if (decoration != '%') {
         pl->word_occurrences++;
     }
@@ -43,55 +63,62 @@ void Index::addPost(const std::string& term, char decoration, int docId){
 }
 
 
-void Index::addDocument(const PageData& page){
+void Index::addDocument(const PageData& page) {
     int docId = (int)documents.size();
-    std::set<std::string> uniqueWords;  // Track unique words for word_count
-    
+    std::set<std::string> uniqueWords;
+
     DocumentMetadata doc_data;
     doc_data.doc_id = docId;
     doc_data.url = page.url.c_str();
     doc_data.title_words = page.titlewords;
-    doc_data.body_words = page.words;
-    doc_data.anchor_texts = page.anchor_text;
     doc_data.hop_distance = static_cast<int>(page.distance_from_seedlist);
+    doc_data.body_length = (int)page.words.size();
     doc_data.start_position = globalPositionCounter;
-    
-    // Add URL
-    // uniqueWords.insert(page.url);
-    // addPost(page.url.c_str(), '#', docId);
 
     std::vector<std::string> urlParts = splitURL(page.url);
-    for(const std::string& part : urlParts) {
+    for (const std::string& part : urlParts) {
         uniqueWords.insert(part);
         addPost(part, '#', docId);
     }
 
-    for(const string& word : page.titlewords){
-        uniqueWords.insert(word);
-        addPost(word, '@', docId);
+    for (const string& word : page.titlewords) {
+        std::string w = fold(word);
+        uniqueWords.insert(w);
+        addPost(w, '@', docId);
     }
 
-    for(const string& word : page.words){
-        uniqueWords.insert(word);
-        addPost(word, 'b', docId);
+    for (const string& word : page.words) {
+        std::string w = fold(word);
+        uniqueWords.insert(w);
+        addPost(w, 'b', docId);
     }
 
-    for(const string& word : page.anchor_text){
-        uniqueWords.insert(word);
-        addPost(word, '$', docId);
+    for (const string& word : page.anchor_text) {
+        std::string w = fold(word);
+        uniqueWords.insert(w);
+        addPost(w, '$', docId);
     }
-    
-    doc_data.word_count = uniqueWords.size();
+
     doc_data.end_position = globalPositionCounter;
 
-    // Emit an EOD post for every term that appeared in this document. All EODs
-    // share the "one past the last word" slot, so we do not bump the counter.
+    // emit an EOD post for every term that appeared in this doc. all EODs share
+    // the "one past the last word" slot, so we do not bump the counter inside
+    // this loop
     for (const std::string& term : uniqueWords) {
         PostingList* pl = getPostingList(term);
         int delta = globalPositionCounter - pl->last_abs_pos;
         pl->addPost(encodePost('%', delta));
         pl->last_abs_pos = globalPositionCounter;
+        if (pl->posts.size() % CHECKPOINT_STRIDE == 0) {
+            pl->addCheckpoint(pl->last_abs_pos);
+        }
     }
+
+    // reserve one slot between docs so position ranges are disjoint
+    // otherwise the next doc's first word would share a slot with this doc's
+    // EOD, and ISR::GetCurrentDocId's binary search could attribute a word to
+    // the wrong doc
+    globalPositionCounter++;
 
     documents.push_back(doc_data);
 }
@@ -110,6 +137,96 @@ int Index::GetDocumentFrequency(const string& term) const {
     return t->value.num_docs;
 }
 
+int Index::GetBodyLength(int docId) const {
+    if (docId < 0 || docId >= (int)documents.size()) return 0;
+    return documents[docId].body_length;
+}
+
+namespace {
+// walk `pl`'s posts within [start, end) in absolute-position space, invoking
+// `fn(abs_pos, post)` for each post whose decoration matches `decoration`.
+// uses checkpoints when available to skip the prefix
+template <typename Fn>
+void walk_field_posts(const Index::PostingList& pl, int start, int end,
+                      char decoration, char (*decode_dec)(uint32_t),
+                      uint32_t (*decode_delta)(uint32_t), Fn fn) {
+    if (pl.posts.empty()) return;
+
+    int cp_abs = 0, cp_idx = 0;
+    bool has_cp = pl.findCheckpoint(start, cp_abs, cp_idx);
+
+    int idx;
+    int abs_pos;
+    if (has_cp) {
+        idx = cp_idx;
+        abs_pos = cp_abs;
+    } else {
+        idx = 0;
+        abs_pos = (int)decode_delta(pl.posts[0]);
+    }
+
+    while (idx < (int)pl.posts.size() && abs_pos < end) {
+        if (abs_pos >= start && decode_dec(pl.posts[idx]) == decoration) {
+            fn(abs_pos, pl.posts[idx]);
+        }
+        idx++;
+        if (idx < (int)pl.posts.size()) {
+            abs_pos += (int)decode_delta(pl.posts[idx]);
+        }
+    }
+}
+}  // namespace
+
+int Index::GetFieldTermFrequency(int docId, const std::string& term, char decoration) const {
+    if (docId < 0 || docId >= (int)documents.size()) return 0;
+    Tuple<std::string, PostingList>* t = dictionary.Find(term);
+    if (!t) return 0;
+
+    const auto& doc = documents[docId];
+    int count = 0;
+    auto dec = [](uint32_t p) -> char {
+        uint32_t v = p & 0x7;
+        switch (v) {
+            case 0: return 'b';
+            case 1: return '@';
+            case 2: return '#';
+            case 3: return '$';
+            case 4: return '%';
+            default: return 'x';
+        }
+    };
+    auto del = [](uint32_t p) -> uint32_t { return p >> 3; };
+    walk_field_posts(t->value, doc.start_position, doc.end_position, decoration,
+                     dec, del, [&](int, uint32_t) { count++; });
+    return count;
+}
+
+std::vector<size_t> Index::GetFieldPositions(int docId, const std::string& term,
+                                              char decoration) const {
+    std::vector<size_t> out;
+    if (docId < 0 || docId >= (int)documents.size()) return out;
+    Tuple<std::string, PostingList>* t = dictionary.Find(term);
+    if (!t) return out;
+
+    const auto& doc = documents[docId];
+    auto dec = [](uint32_t p) -> char {
+        uint32_t v = p & 0x7;
+        switch (v) {
+            case 0: return 'b';
+            case 1: return '@';
+            case 2: return '#';
+            case 3: return '$';
+            case 4: return '%';
+            default: return 'x';
+        }
+    };
+    auto del = [](uint32_t p) -> uint32_t { return p >> 3; };
+    walk_field_posts(t->value, doc.start_position, doc.end_position, decoration,
+                     dec, del,
+                     [&](int abs_pos, uint32_t) { out.push_back((size_t)abs_pos); });
+    return out;
+}
+
 void Index::Finalize(){
     dictionary.Optimize(1.5);
 }
@@ -119,7 +236,7 @@ void Index::Finalize(){
 // layout rather than mmap-optimized structure.
 namespace {
 constexpr uint64_t BLOB_MAGIC   = 0x494E444558424C42ULL;  // "INDEXBLB"
-constexpr uint64_t BLOB_VERSION = 1;
+constexpr uint64_t BLOB_VERSION = 2;
 
 template <typename T>
 void write_pod(std::ostream& o, const T& v) {
@@ -189,15 +306,11 @@ bool Index::WriteBlob(const std::string& path) const {
     for (const auto& d : documents) {
         write_pod(o, static_cast<int32_t>(d.doc_id));
         write_str(o, d.url);
-        write_str(o, d.title);
         write_str_vec(o, d.title_words);
-        write_str_vec(o, d.body_words);
-        write_str_vec(o, d.anchor_texts);
         write_pod(o, static_cast<int32_t>(d.hop_distance));
-        write_pod(o, static_cast<int32_t>(d.word_count));
+        write_pod(o, static_cast<int32_t>(d.body_length));
         write_pod(o, static_cast<int32_t>(d.start_position));
         write_pod(o, static_cast<int32_t>(d.end_position));
-        write_pod(o, static_cast<int32_t>(d.eod_post_index));
     }
 
     // dictionary — count first (iterate once to count, again to write)
@@ -243,15 +356,11 @@ bool Index::LoadBlob(const std::string& path) {
         int32_t v;
         if (!read_pod(i, v)) return false; d.doc_id = v;
         if (!read_str(i, d.url)) return false;
-        if (!read_str(i, d.title)) return false;
         if (!read_str_vec(i, d.title_words)) return false;
-        if (!read_str_vec(i, d.body_words)) return false;
-        if (!read_str_vec(i, d.anchor_texts)) return false;
         if (!read_pod(i, v)) return false; d.hop_distance = v;
-        if (!read_pod(i, v)) return false; d.word_count = v;
+        if (!read_pod(i, v)) return false; d.body_length = v;
         if (!read_pod(i, v)) return false; d.start_position = v;
         if (!read_pod(i, v)) return false; d.end_position = v;
-        if (!read_pod(i, v)) return false; d.eod_post_index = v;
         documents.push_back(std::move(d));
     }
 

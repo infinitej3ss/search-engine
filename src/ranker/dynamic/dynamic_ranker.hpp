@@ -11,17 +11,20 @@
 #include "span_finder.hpp"
 #include "../../../config/weights.hpp"
 
-// minimal view of a document for dynamic ranking. mirrors the subset of
-// parser/crawler DocInfo the ranker actually consumes.
-// TODO replace with parser team's DocInfo once finalized
+// minimal view of a document for dynamic ranking
+// body_tf / body_positions are per-query signals derived from the index at
+// query time (via Index::GetFieldTermFrequency / GetFieldPositions). title
+// is kept as a word list because title_words stays in DocumentMetadata
 struct DocCandidate {
   uint32_t doc_id = 0;
   std::string url;
   std::vector<std::string> title_words;
-  std::vector<std::string> body_words;
-  std::vector<std::string> anchor_texts;
-  int hop_distance = -1;   // -1 if unknown
+  int hop_distance = -1;
+  int body_length = 0;
   std::string domain;
+  // per-query signals; populated by the search engine before scoring
+  std::unordered_map<std::string, int> body_tf;
+  std::unordered_map<std::string, std::vector<size_t>> body_positions;
 };
 
 // lowercase a string for case-insensitive matching.
@@ -96,9 +99,8 @@ inline double t1_metastream(
     }
 
     if (best < W_FIELD_BODY) {
-      for (const auto& w : doc.body_words) {
-        if (to_lower(w) == term) { best = std::max(best, W_FIELD_BODY); break; }
-      }
+      auto it = doc.body_tf.find(term);
+      if (it != doc.body_tf.end() && it->second > 0) best = std::max(best, W_FIELD_BODY);
     }
 
     total += best;
@@ -107,16 +109,10 @@ inline double t1_metastream(
   return total / static_cast<double>(query.size());
 }
 
-// compute span score for a single field using the brainstorm formula:
-//   all_terms × (0.3 + 0.3·exact + 0.25·in_order + 0.15/span)
-inline double span_score_for_field(
-    const std::vector<std::string>& query,
-    const std::vector<std::string>& field) {
-  if (query.empty() || field.empty()) return 0.0;
-
-  auto positions = build_positions(query, field);
+// span score formula: all_terms × (0.3 + 0.3·exact + 0.25·in_order + 0.15/span)
+inline double span_score_from_positions(
+    const std::vector<std::vector<size_t>>& positions) {
   auto span = find_span(positions);
-
   if (!span.all_terms_present) return 0.0;
 
   double score = 0.3;
@@ -128,19 +124,35 @@ inline double span_score_for_field(
   } else {
     score += 0.15;
   }
-
   return score;
 }
 
-// t2 — span / proximity. runs span_finder over title and body,
-// takes a weighted combination. title proximity matters more than body.
+// span score over a raw word list (still used for title, which stays in
+// DocCandidate as title_words)
+inline double span_score_for_field(
+    const std::vector<std::string>& query,
+    const std::vector<std::string>& field) {
+  if (query.empty() || field.empty()) return 0.0;
+  return span_score_from_positions(build_positions(query, field));
+}
+
+// t2 — span / proximity. title is scanned locally; body uses index-derived
+// positions pre-populated on the candidate
 inline double t2_span(
     const std::vector<std::string>& query,
     const DocCandidate& doc) {
   if (query.empty()) return 0.0;
 
   double title_span = span_score_for_field(query, doc.title_words);
-  double body_span  = span_score_for_field(query, doc.body_words);
+
+  // translate doc.body_positions (keyed by term) into a parallel
+  // positions_per_term vector aligned with `query`
+  std::vector<std::vector<size_t>> body_pos(query.size());
+  for (size_t i = 0; i < query.size(); i++) {
+    auto it = doc.body_positions.find(query[i]);
+    if (it != doc.body_positions.end()) body_pos[i] = it->second;
+  }
+  double body_span = span_score_from_positions(body_pos);
 
   // title proximity weighted higher — a tight span in the title is
   // a stronger signal than in the body

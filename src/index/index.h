@@ -117,15 +117,11 @@ class Index{
         struct DocumentMetadata{
             int doc_id = 0;
             std::string url;
-            std::string title;
-            std::vector<std::string> title_words;   // for ranker's DocCandidate
-            std::vector<std::string> body_words;    // for ranker's DocCandidate
-            std::vector<std::string> anchor_texts;  // for ranker's DocCandidate
+            std::vector<std::string> title_words;   // for display title + ranker title signals
             int hop_distance = -1;                  // from PageData::distance_from_seedlist
-            int word_count = 0;
+            int body_length = 0;                    // raw body word count (for BM25 avg/tf)
             int start_position = 0;
             int end_position = 0;
-            int eod_post_index = 0;
         };
 
         Index();
@@ -137,6 +133,16 @@ class Index{
         DocumentMetadata GetDocumentMetadata(int docId);
         int GetDocumentCount() const;
         int GetDocumentFrequency(const std::string& term) const;
+
+        int GetBodyLength(int docId) const;
+
+        int GetFieldTermFrequency(int docId, const std::string& term, char decoration) const;
+
+        // absolute positions of posts for `term` within doc `docId` whose
+        // decoration matches, in index order. span scoring uses differences
+        // between positions, so absolute vs field-local doesn't matter
+        std::vector<size_t> GetFieldPositions(int docId, const std::string& term,
+                                              char decoration) const;
 
         bool WriteBlob(const std::string& path) const;
         bool LoadBlob(const std::string& path);

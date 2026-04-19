@@ -39,60 +39,10 @@ private:
         d.doc_id = static_cast<uint32_t>(meta.doc_id);
         d.url = meta.url;
         d.title_words = meta.title_words;
-        d.body_words = meta.body_words;
-        d.anchor_texts = meta.anchor_texts;
         d.hop_distance = meta.hop_distance;
+        d.body_length = meta.body_length;
+        // body_tf / body_positions are filled in per-query by the caller
         return d;
-    }
-
-    // build a snippet by finding the first query term in body_words
-    // and extracting a window around it. skips junk tokens (json, markup).
-    static std::string make_snippet(const std::vector<std::string>& terms,
-                                     const std::vector<std::string>& body_words,
-                                     int window = 20) {
-        if (body_words.empty() || terms.empty()) return "";
-
-        constexpr size_t MAX_WORD_LEN = 30;
-        constexpr size_t MAX_SNIPPET_LEN = 200;
-
-        // skip words that look like markup/json
-        auto is_clean = [](const std::string& w) {
-            return w.size() <= 40 && w.find('{') == std::string::npos
-                                  && w.find('<') == std::string::npos;
-        };
-
-        // find the position of the first matching clean term
-        int best_pos = -1;
-        for (size_t j = 0; j < body_words.size() && best_pos < 0; j++) {
-            if (!is_clean(body_words[j])) continue;
-            std::string lower;
-            for (char c : body_words[j])
-                lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            for (const auto& t : terms) {
-                if (lower == t) { best_pos = static_cast<int>(j); break; }
-            }
-        }
-
-        if (best_pos < 0) best_pos = 0;
-
-        int start = std::max(0, best_pos - window / 2);
-        int end = std::min(static_cast<int>(body_words.size()), start + window);
-
-        std::string snippet;
-        if (start > 0) snippet += "... ";
-        for (int i = start; i < end; i++) {
-            if (!is_clean(body_words[i])) continue;
-            if (!snippet.empty() && snippet.back() != ' ') snippet += " ";
-            const auto& w = body_words[i];
-            if (w.size() > MAX_WORD_LEN)
-                snippet += w.substr(0, MAX_WORD_LEN) + "...";
-            else
-                snippet += w;
-            if (snippet.size() >= MAX_SNIPPET_LEN) break;
-        }
-        if (end < static_cast<int>(body_words.size())) snippet += " ...";
-
-        return decode_html_entities(snippet);
     }
 
     // decode common html entities in a string
@@ -209,7 +159,7 @@ private:
 
             double total = 0.0;
             for (int i = 0; i < n; i++) {
-                total += idx->GetDocumentMetadata(i).body_words.size();
+                total += idx->GetBodyLength(i);
             }
             avg_doc_lengths.push_back(total / n);
             std::fprintf(stderr, "[engine] rank %zu: avg doc length %.1f words\n",
@@ -278,7 +228,16 @@ public:
         for (int doc_id : doc_ids) {
             auto meta = indexes[level]->GetDocumentMetadata(doc_id);
             DocCandidate cand = to_candidate(meta);
-            double bm25_raw = bm25.score(cand.body_words, terms, doc_freq);
+
+            // per-query signals for T1 (body_tf), T2 (body_positions), and BM25
+            for (const auto& term : terms) {
+                cand.body_tf[term] =
+                    indexes[level]->GetFieldTermFrequency(doc_id, term, 'b');
+                cand.body_positions[term] =
+                    indexes[level]->GetFieldPositions(doc_id, term, 'b');
+            }
+            double bm25_raw = bm25.score(cand.body_length, cand.body_tf, terms, doc_freq);
+
             candidates.push_back({doc_id, std::move(meta), std::move(cand), bm25_raw});
         }
 
@@ -308,7 +267,10 @@ public:
             double ds = score_dynamic(terms, c.cand, GENERAL, bm25_norm);
 
             std::string title = join_title(c.meta.title_words);
-            std::string snippet = make_snippet(terms, c.cand.body_words);
+            // TODO(crawler-team): wire up their snippet mechanism. until then,
+            // we don't have body text to summarize from since the index no
+            // longer stores it
+            std::string snippet;
 
             results.push_back({c.doc_id, c.meta.url, title, snippet, ss, ds, s});
         }
