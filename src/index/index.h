@@ -1,204 +1,114 @@
 #pragma once
-#include <cstring>
+
+// read-only, mmap-backed inverted index. constructed from a V4 blob (see
+// blob_format.h). zero-copy at query time: posting lists live inside the
+// mapped region and are surfaced as non-owning views
+//
+// build-time index construction lives in IndexBuilder (index_builder.h)
+
+#include <cstdint>
+#include <span>
+#include <string>
+#include <sys/types.h>
 #include <vector>
-#include "page_data.h"
-#include "HashTable.h"
 
-using namespace std;
+class Index {
+ public:
+  // non-owning view over one posting list. fields mirror the old in-memory
+  // PostingList so ISR / constraint_solver keep working with minimal churn
+  // (std::span supports .size() and operator[] like std::vector does)
+  struct PostingListView {
+    std::span<const uint32_t> posts;
+    std::span<const int32_t>  seek_absolutes;
+    std::span<const int32_t>  seek_indices;
+    int32_t last_abs_pos = 0;
+    int32_t num_docs = 0;
+    int32_t word_occurrences = 0;
+    int32_t last_doc_id = -1;
+    bool is_valid = false;
 
-class Index{
-    public:
-        //[0-2]decorations [31-3]delta 
-        uint32_t encodePost(char decoration, int delta){
-            uint32_t dec_bits = 0;
-            switch (decoration){
-                case 'b'://body
-                    dec_bits = 0;
-                    break;
-                case '@': //title
-                    dec_bits = 1;
-                    break;
-                case '#': //url
-                    dec_bits = 2;
-                    break;
-                case '$'://anchor text
-                    dec_bits = 3;
-                    break;
-                case '%'://end of doc
-                    dec_bits = 4;
-                    break;
-                default:
-                    break;
-            }
-            return (delta<<3) | dec_bits;
-        };//encode post
+    // binary search the checkpoint table for target_absolute_pos.
+    // returns true and fills out_* if a checkpoint <= target was found
+    bool findCheckpoint(int target_absolute_pos,
+                         int& out_absolute_pos,
+                         int& out_post_index) const;
+  };
 
-        uint32_t decodeDelta(uint32_t post){
-            //shift to get rid of decoration bits and read bits as normal
-            return post >> 3;
-        }; //decode delta
-        
-        char decodeDecoration(uint32_t post){//chaged int return to char return
-            uint32_t value = post & 0x7;
-            switch (value){
-                case 0:
-                    return 'b';
-                case 1:
-                    return '@';
-                case 2:
-                    return '#';
-                case 3:
-                    return '$';
-                case 4:
-                    return '%';
-                default:
-                    return 'x';
-            }
-        
-        };//decode decoration
+  // transition alias — old code that says `Index::PostingList` still compiles
+  using PostingList = PostingListView;
 
-        struct PostingList{
-            //array of posts
-            std::vector<uint32_t> posts;
-            std::vector<int> seek_absolutes;
-            std::vector<int> seek_indices;
-            int last_abs_pos = 0;
-            int num_docs = 0;
-            int word_occurrences = 0; // Total occurrences of the term across all documents (not including the EOD post)
-            int last_doc_id = -1; // Track the last document ID that was added for this term, to help with adding EOD markers correctly
+  // per-doc metadata, materialized lazily from the mmap region
+  struct DocumentMetadata {
+    int doc_id = 0;
+    std::string url;
+    std::vector<std::string> title_words;
+    int hop_distance = -1;
+    int body_length = 0;
+    int start_position = 0;
+    int end_position = 0;
+    u_int64_t page_file_rank = 0;
+    u_int64_t page_file_num = 0;
+    u_int64_t page_file_index = 0;
+  };
 
-            // Add constructor to ensure initialization
-            PostingList() : last_abs_pos(0), num_docs(0), word_occurrences(0) {}
-            
-            void addPost(uint32_t encoded){
-                posts.push_back(encoded);
-            } // Add Post
+  Index();
+  explicit Index(const std::string& path);
+  Index(const Index&) = delete;
+  Index& operator=(const Index&) = delete;
+  Index(Index&& other) noexcept;
+  Index& operator=(Index&& other) noexcept;
+  ~Index();
 
-            void addCheckpoint(int absolute_pos){
-                seek_absolutes.push_back(absolute_pos);
-                seek_indices.push_back((int)posts.size() - 1);
-            }; //Add Checkpoint
+  bool isOpen() const { return mapped != nullptr; }
 
-            int translateDelta(int checkpoint_absolute_pos, int checkpoint_index, int target_index) const {
-                int absolute = checkpoint_absolute_pos;
-                for (int i = checkpoint_index; i <= target_index; i++){
-                    absolute += posts[i] >> 3;
-                }
-                return absolute;
-            };//Translate Deltas
+  // load a V4 blob via mmap. returns false if the file is missing, the
+  // header fails magic/version checks, or mmap fails
+  bool LoadBlob(const std::string& path);
 
-            int findCheckpoint (int target_absolute_pos, int& out_absolute_pos, int& out_post_index)const{
-                int lo = 0;
-                int hi = (int)seek_absolutes.size() - 1;
-                int best = -1;
-                while(lo<=hi){
-                    int mid = (lo + hi) / 2;
-                    if (seek_absolutes[mid] <= target_absolute_pos){
-                        best = mid;
-                        lo = mid + 1;
-                    }
-                    else{
-                        hi = mid - 1;
-                    }
-                }
-                if (best == -1){
-                    out_absolute_pos = 0;
-                    out_post_index = 0;
-                    return false;
-                }
-                out_absolute_pos = seek_absolutes[best];
-                out_post_index = seek_indices[best];
-                return true;
-            };
+  uint32_t decodeDelta(uint32_t post) const { return post >> 3; }
+  char decodeDecoration(uint32_t post) const;
 
-        };//PostingList struct
+  int GetDocumentCount() const { return static_cast<int>(n_docs); }
+  int GetDocumentFrequency(const std::string& term) const;
+  DocumentMetadata GetDocumentMetadata(int docId) const;
+  int GetBodyLength(int docId) const;
 
+  // returns a view. use .is_valid on the returned view to check whether
+  // the term was found. the view's spans are valid for the lifetime of
+  // this Index object
+  PostingListView getPostingList(const std::string& term) const;
 
-        struct DocumentMetadata{
-            int doc_id = 0;
-            std::string url;
-            std::vector<std::string> title_words;   // for display title + ranker title signals
-            int hop_distance = -1;                  // from PageData::distance_from_seedlist
-            int body_length = 0;                    // raw body word count (for BM25 avg/tf)
-            int start_position = 0;
-            int end_position = 0;
-            // locator for fetching raw page data at query time (snippet gen)
-            u_int64_t page_file_rank = 0;
-            u_int64_t page_file_num = 0;
-            u_int64_t page_file_index = 0;
-        };
+  int GetFieldTermFrequency(int docId, const std::string& term, char decoration) const;
+  std::vector<size_t> GetFieldPositions(int docId, const std::string& term, char decoration) const;
 
-        Index();
+  // lightweight per-doc range lookup used by ISR::GetCurrentDocId's binary
+  // search. avoids materializing the full DocumentMetadata (url, title
+  // words) on every step
+  bool GetDocumentRange(int docId, int& out_start, int& out_end) const;
 
-        ~Index();
-        void addDocument(const PageData& page);
-        void Finalize();
-        PostingList* getPostingList(const std::string& term);
-        DocumentMetadata GetDocumentMetadata(int docId);
-        int GetDocumentCount() const;
-        int GetDocumentFrequency(const std::string& term) const;
+ private:
+  void close_mmap();
 
-        int GetBodyLength(int docId) const;
+  // blob offset → pointer into the mapped region
+  const char* at(uint64_t offset) const { return base + offset; }
 
-        int GetFieldTermFrequency(int docId, const std::string& term, char decoration) const;
+  // walk the dictionary chain for `term`; returns the posting list's
+  // absolute blob offset, or 0 if the term isn't in the dictionary
+  uint64_t find_term_offset(const std::string& term) const;
 
-        // absolute positions of posts for `term` within doc `docId` whose
-        // decoration matches, in index order. span scoring uses differences
-        // between positions, so absolute vs field-local doesn't matter
-        std::vector<size_t> GetFieldPositions(int docId, const std::string& term,
-                                              char decoration) const;
+  // construct a PostingListView from a posting list's absolute blob offset
+  PostingListView make_view_at(uint64_t posting_offset) const;
 
-        bool WriteBlob(const std::string& path) const;
-        bool LoadBlob(const std::string& path);
-        //to deal with read only
-        //const PostingList* getPostingList(const char* term)const;
-        //debugging functions
-        void DebugPositionMapping(int docId, int position);
-        void DebugDocumentBoundaries();
+  void* mapped = nullptr;
+  size_t mapped_size = 0;
+  const char* base = nullptr;
 
-        void EnableDebug(bool enable) { debug_mode = enable; }
-        void SetDebugWord(const std::string& word) { debug_word = word; }
-        
-        vector<string> splitURL(const string& url){
-            vector<string> parts;
-            string current;
-            
-            //cout << "  splitURL input: '" << url << "'" << endl;
-            
-            for(char c : url){
-                if(isalnum(c)){
-                    current += tolower(c);
-                } else if(!current.empty()){
-                    //cout << "    Found part: '" << current << "'" << endl;
-                    parts.push_back(current);
-                    current.clear();
-                }
-            }
-            if(!current.empty()){
-            // cout << "    Found part: '" << current << "'" << endl;
-                parts.push_back(current);
-            }
-            
-            //cout << "    Total URL parts: " << parts.size() << endl;
-            return parts;
-        }       
-        // Add this function to Index.h
-    
-
-        
-    private:
-        HashTable<std::string, PostingList> dictionary;
-
-        std::vector<DocumentMetadata> documents;
-        int globalPositionCounter = 0;
-
-        void addPost(const std::string& term, char decoration, int docId);
-        //debugging
-        bool debug_mode = false;
-        std::string debug_word;
-    
-    
+  // cached from the blob header
+  uint64_t n_docs = 0;
+  uint64_t n_terms = 0;
+  uint64_t doc_table_offset = 0;
+  uint64_t title_refs_offset = 0;
+  uint64_t dict_offset = 0;
+  uint64_t posting_arena_offset = 0;
+  uint64_t string_arena_offset = 0;
 };
-
-// Build index from crawler data files
-Index* BuildIndex();

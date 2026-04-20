@@ -1,436 +1,327 @@
 #include "index.h"
-#include "Common.h"
-#include "page_data.h"
-#include <cctype>
-#include <iostream>
-#include <fstream>
-#include <set>
+
 #include <cstdint>
+#include <cstring>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-using namespace std;
+#include "blob_format.h"
+#include "Common.h"
 
-namespace {
-// one seek checkpoint every N posts per posting list
-// tunable: lower means faster Seek at the cost of more per-list metadata
-// tests/test_index_seek_checkpoints.cpp pins the same value, keep them in sync
-constexpr size_t CHECKPOINT_STRIDE = 128;
-
-// case-fold a token for dictionary storage. query compiler always lowercases,
-// so dictionary keys must match
-std::string fold(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-}  // namespace
-
-// starts with a generous bucket count because Optimize only runs in Finalize/LoadBlob
-// during build, every insertion hits a chain, so under-sized = slow build
-Index::Index() : dictionary(CompareEqual, str_hash, 1 << 20), globalPositionCounter(0) {}
-
-Index::~Index() {}
-
-Index::PostingList* Index::getPostingList(const string& term){
-    Tuple<std::string, PostingList>* t = dictionary.Find(term);
-    if (!t) {
-        t = dictionary.Find(term, PostingList());
+bool Index::PostingListView::findCheckpoint(int target_absolute_pos,
+                                             int& out_absolute_pos,
+                                             int& out_post_index) const {
+  int lo = 0;
+  int hi = static_cast<int>(seek_absolutes.size()) - 1;
+  int best = -1;
+  while (lo <= hi) {
+    int mid = (lo + hi) / 2;
+    if (seek_absolutes[mid] <= target_absolute_pos) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
     }
-    return &t->value;
-}
-
-void Index::addPost(const std::string& term, char decoration, int docId){
-    PostingList* pl = getPostingList(term);
-
-    if (pl->last_doc_id != docId) {
-        pl->num_docs++;
-        pl->last_doc_id = docId;
-    }
-
-    int delta = globalPositionCounter - pl->last_abs_pos;
-    pl->last_abs_pos = globalPositionCounter;
-
-    uint32_t encoded = encodePost(decoration, delta);
-    pl->addPost(encoded);
-
-    if (pl->posts.size() % CHECKPOINT_STRIDE == 0) {
-        pl->addCheckpoint(pl->last_abs_pos);
-    }
-
-    if (decoration != '%') {
-        pl->word_occurrences++;
-    }
-
-    globalPositionCounter++;
+  }
+  if (best == -1) {
+    out_absolute_pos = 0;
+    out_post_index = 0;
+    return false;
+  }
+  out_absolute_pos = seek_absolutes[best];
+  out_post_index = seek_indices[best];
+  return true;
 }
 
+Index::Index() = default;
 
-void Index::addDocument(const PageData& page) {
-    int docId = (int)documents.size();
-    std::set<std::string> uniqueWords;
+Index::Index(const std::string& path) { LoadBlob(path); }
 
-    DocumentMetadata doc_data;
-    doc_data.doc_id = docId;
-    doc_data.url = page.url.c_str();
-    doc_data.title_words = page.titlewords;
-    doc_data.hop_distance = static_cast<int>(page.distance_from_seedlist);
-    doc_data.body_length = (int)page.words.size();
-    doc_data.page_file_rank = page.page_file_rank;
-    doc_data.page_file_num = page.page_file_num;
-    doc_data.page_file_index = page.page_file_index;
-    doc_data.start_position = globalPositionCounter;
+Index::~Index() { close_mmap(); }
 
-    std::vector<std::string> urlParts = splitURL(page.url);
-    for (const std::string& part : urlParts) {
-        uniqueWords.insert(part);
-        addPost(part, '#', docId);
-    }
-
-    for (const string& word : page.titlewords) {
-        std::string w = fold(word);
-        uniqueWords.insert(w);
-        addPost(w, '@', docId);
-    }
-
-    for (const string& word : page.words) {
-        std::string w = fold(word);
-        uniqueWords.insert(w);
-        addPost(w, 'b', docId);
-    }
-
-    for (const string& word : page.anchor_text) {
-        std::string w = fold(word);
-        uniqueWords.insert(w);
-        addPost(w, '$', docId);
-    }
-
-    doc_data.end_position = globalPositionCounter;
-
-    // emit an EOD post for every term that appeared in this doc. all EODs share
-    // the "one past the last word" slot, so we do not bump the counter inside
-    // this loop
-    for (const std::string& term : uniqueWords) {
-        PostingList* pl = getPostingList(term);
-        int delta = globalPositionCounter - pl->last_abs_pos;
-        pl->addPost(encodePost('%', delta));
-        pl->last_abs_pos = globalPositionCounter;
-        if (pl->posts.size() % CHECKPOINT_STRIDE == 0) {
-            pl->addCheckpoint(pl->last_abs_pos);
-        }
-    }
-
-    // reserve one slot between docs so position ranges are disjoint
-    // otherwise the next doc's first word would share a slot with this doc's
-    // EOD, and ISR::GetCurrentDocId's binary search could attribute a word to
-    // the wrong doc
-    globalPositionCounter++;
-
-    documents.push_back(doc_data);
+Index::Index(Index&& other) noexcept
+    : mapped(other.mapped),
+      mapped_size(other.mapped_size),
+      base(other.base),
+      n_docs(other.n_docs),
+      n_terms(other.n_terms),
+      doc_table_offset(other.doc_table_offset),
+      title_refs_offset(other.title_refs_offset),
+      dict_offset(other.dict_offset),
+      posting_arena_offset(other.posting_arena_offset),
+      string_arena_offset(other.string_arena_offset) {
+  other.mapped = nullptr;
+  other.mapped_size = 0;
+  other.base = nullptr;
 }
 
-Index::DocumentMetadata Index::GetDocumentMetadata(int docId){
-    return documents[docId];
+Index& Index::operator=(Index&& other) noexcept {
+  if (this != &other) {
+    close_mmap();
+    mapped = other.mapped;
+    mapped_size = other.mapped_size;
+    base = other.base;
+    n_docs = other.n_docs;
+    n_terms = other.n_terms;
+    doc_table_offset = other.doc_table_offset;
+    title_refs_offset = other.title_refs_offset;
+    dict_offset = other.dict_offset;
+    posting_arena_offset = other.posting_arena_offset;
+    string_arena_offset = other.string_arena_offset;
+    other.mapped = nullptr;
+    other.mapped_size = 0;
+    other.base = nullptr;
+  }
+  return *this;
 }
 
-int Index::GetDocumentCount() const{
-    return (int)documents.size();
+void Index::close_mmap() {
+  if (mapped) {
+    munmap(mapped, mapped_size);
+    mapped = nullptr;
+    mapped_size = 0;
+    base = nullptr;
+  }
 }
 
-int Index::GetDocumentFrequency(const string& term) const {
-    Tuple<std::string, PostingList>* t = dictionary.Find(term);
-    if (!t) return 0;
-    return t->value.num_docs;
+char Index::decodeDecoration(uint32_t post) const {
+  switch (post & 0x7) {
+    case 0: return 'b';
+    case 1: return '@';
+    case 2: return '#';
+    case 3: return '$';
+    case 4: return '%';
+    default: return 'x';
+  }
+}
+
+bool Index::LoadBlob(const std::string& path) {
+  close_mmap();
+
+  int fd = open(path.c_str(), O_RDONLY);
+  if (fd == -1) return false;
+
+  struct stat st;
+  if (fstat(fd, &st) == -1) { close(fd); return false; }
+  mapped_size = static_cast<size_t>(st.st_size);
+  if (mapped_size < sizeof(blob_v4::Header)) { close(fd); return false; }
+
+  mapped = mmap(nullptr, mapped_size, PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  if (mapped == MAP_FAILED) {
+    mapped = nullptr;
+    mapped_size = 0;
+    return false;
+  }
+
+  base = reinterpret_cast<const char*>(mapped);
+  const blob_v4::Header* hdr = reinterpret_cast<const blob_v4::Header*>(base);
+  if (hdr->magic != blob_v4::MAGIC || hdr->version != blob_v4::VERSION) {
+    close_mmap();
+    return false;
+  }
+
+  n_docs = hdr->n_docs;
+  n_terms = hdr->n_terms;
+  doc_table_offset = hdr->doc_table_offset;
+  title_refs_offset = hdr->title_refs_offset;
+  dict_offset = hdr->dict_offset;
+  posting_arena_offset = hdr->posting_arena_offset;
+  string_arena_offset = hdr->string_arena_offset;
+  return true;
+}
+
+// dictionary lookup 
+
+uint64_t Index::find_term_offset(const std::string& term) const {
+  if (!mapped) return 0;
+
+  const char* dict = at(dict_offset);
+  uint64_t n_buckets;
+  std::memcpy(&n_buckets, dict, sizeof(uint64_t));
+  const uint64_t* bucket_offsets =
+      reinterpret_cast<const uint64_t*>(dict + sizeof(uint64_t));
+
+  uint64_t hash = str_hash(term);
+  uint64_t off = bucket_offsets[hash % n_buckets];
+  if (off == 0) return 0;
+
+  // walk the chain. each tuple: uint64 length, uint64 posting_offset,
+  // uint64 hash, char term[]; chain ends at a tuple whose length == 0
+  while (true) {
+    const blob_v4::SerialTuple* st =
+        reinterpret_cast<const blob_v4::SerialTuple*>(at(off));
+    if (st->length == 0) return 0;
+    const char* st_term =
+        reinterpret_cast<const char*>(st) + sizeof(blob_v4::SerialTuple);
+    if (st->hash == hash && std::strcmp(st_term, term.c_str()) == 0) {
+      return st->posting_list_offset;
+    }
+    off += st->length;
+  }
+}
+
+Index::PostingListView Index::make_view_at(uint64_t posting_offset) const {
+  PostingListView v;
+  const blob_v4::PostingHeader* ph =
+      reinterpret_cast<const blob_v4::PostingHeader*>(at(posting_offset));
+  v.last_abs_pos = ph->last_abs_pos;
+  v.num_docs = ph->num_docs;
+  v.word_occurrences = ph->word_occurrences;
+  v.last_doc_id = ph->last_doc_id;
+
+  const char* after_header =
+      at(posting_offset) + sizeof(blob_v4::PostingHeader);
+  const uint32_t* posts = reinterpret_cast<const uint32_t*>(after_header);
+  const int32_t*  seeks_abs = reinterpret_cast<const int32_t*>(
+      after_header + ph->n_posts * sizeof(uint32_t));
+  const int32_t*  seeks_idx = reinterpret_cast<const int32_t*>(
+      after_header + ph->n_posts * sizeof(uint32_t)
+                   + ph->n_checkpoints * sizeof(int32_t));
+
+  v.posts = {posts, ph->n_posts};
+  v.seek_absolutes = {seeks_abs, ph->n_checkpoints};
+  v.seek_indices = {seeks_idx, ph->n_checkpoints};
+  v.is_valid = true;
+  return v;
+}
+
+Index::PostingListView Index::getPostingList(const std::string& term) const {
+  uint64_t off = find_term_offset(term);
+  if (off == 0) return PostingListView{}; // is_valid = false
+  return make_view_at(off);
+}
+
+int Index::GetDocumentFrequency(const std::string& term) const {
+  uint64_t off = find_term_offset(term);
+  if (off == 0) return 0;
+  const blob_v4::PostingHeader* ph =
+      reinterpret_cast<const blob_v4::PostingHeader*>(at(off));
+  return ph->num_docs;
+}
+
+// document accessors
+
+const blob_v4::DocRecord* Index_DocRecord(const Index& /*ix*/,
+                                           const char* base,
+                                           uint64_t doc_table_offset,
+                                           int docId) {
+  return reinterpret_cast<const blob_v4::DocRecord*>(
+      base + doc_table_offset + docId * sizeof(blob_v4::DocRecord));
+}
+
+Index::DocumentMetadata Index::GetDocumentMetadata(int docId) const {
+  DocumentMetadata m;
+  if (!mapped || docId < 0 || docId >= static_cast<int>(n_docs)) return m;
+
+  const blob_v4::DocRecord* r = Index_DocRecord(*this, base, doc_table_offset, docId);
+  m.doc_id = r->doc_id;
+  m.hop_distance = r->hop_distance;
+  m.body_length = r->body_length;
+  m.start_position = r->start_position;
+  m.end_position = r->end_position;
+  m.page_file_rank = r->page_file_rank;
+  m.page_file_num = r->page_file_num;
+  m.page_file_index = r->page_file_index;
+
+  // url lives in the string arena
+  const char* strings = at(string_arena_offset);
+  m.url.assign(strings + r->url_offset, r->url_length);
+
+  // title words are a run of TitleWordRefs; each points back into string arena
+  const blob_v4::TitleWordRef* refs =
+      reinterpret_cast<const blob_v4::TitleWordRef*>(at(title_refs_offset));
+  m.title_words.reserve(r->title_words_count);
+  for (uint32_t i = 0; i < r->title_words_count; i++) {
+    const auto& ref = refs[r->title_words_offset + i];
+    m.title_words.emplace_back(strings + ref.string_offset, ref.length);
+  }
+  return m;
 }
 
 int Index::GetBodyLength(int docId) const {
-    if (docId < 0 || docId >= (int)documents.size()) return 0;
-    return documents[docId].body_length;
+  if (!mapped || docId < 0 || docId >= static_cast<int>(n_docs)) return 0;
+  const blob_v4::DocRecord* r = Index_DocRecord(*this, base, doc_table_offset, docId);
+  return r->body_length;
 }
+
+bool Index::GetDocumentRange(int docId, int& out_start, int& out_end) const {
+  if (!mapped || docId < 0 || docId >= static_cast<int>(n_docs)) return false;
+  const blob_v4::DocRecord* r = Index_DocRecord(*this, base, doc_table_offset, docId);
+  out_start = r->start_position;
+  out_end = r->end_position;
+  return true;
+}
+
+// per-doc field queries
 
 namespace {
-// walk `pl`'s posts within [start, end) in absolute-position space, invoking
-// `fn(abs_pos, post)` for each post whose decoration matches `decoration`.
-// uses checkpoints when available to skip the prefix
+
+// walk a PostingListView's posts within [start, end) absolute positions,
+// invoking `fn(abs_pos, post)` for each post whose decoration matches
 template <typename Fn>
-void walk_field_posts(const Index::PostingList& pl, int start, int end,
-                      char decoration, char (*decode_dec)(uint32_t),
-                      uint32_t (*decode_delta)(uint32_t), Fn fn) {
-    if (pl.posts.empty()) return;
+void walk_field_posts(const Index::PostingListView& view, int start, int end,
+                      char decoration, Fn fn) {
+  if (view.posts.empty()) return;
 
-    int cp_abs = 0, cp_idx = 0;
-    bool has_cp = pl.findCheckpoint(start, cp_abs, cp_idx);
+  int cp_abs = 0, cp_idx = 0;
+  bool has_cp = view.findCheckpoint(start, cp_abs, cp_idx);
 
-    int idx;
-    int abs_pos;
-    if (has_cp) {
-        idx = cp_idx;
-        abs_pos = cp_abs;
-    } else {
-        idx = 0;
-        abs_pos = (int)decode_delta(pl.posts[0]);
+  int idx;
+  int abs_pos;
+  if (has_cp) {
+    idx = cp_idx;
+    abs_pos = cp_abs;
+  } else {
+    idx = 0;
+    abs_pos = static_cast<int>(view.posts[0] >> 3);
+  }
+
+  auto dec = [](uint32_t p) -> char {
+    switch (p & 0x7) {
+      case 0: return 'b';
+      case 1: return '@';
+      case 2: return '#';
+      case 3: return '$';
+      case 4: return '%';
+      default: return 'x';
     }
+  };
 
-    while (idx < (int)pl.posts.size() && abs_pos < end) {
-        if (abs_pos >= start && decode_dec(pl.posts[idx]) == decoration) {
-            fn(abs_pos, pl.posts[idx]);
-        }
-        idx++;
-        if (idx < (int)pl.posts.size()) {
-            abs_pos += (int)decode_delta(pl.posts[idx]);
-        }
+  while (idx < static_cast<int>(view.posts.size()) && abs_pos < end) {
+    if (abs_pos >= start && dec(view.posts[idx]) == decoration) {
+      fn(abs_pos, view.posts[idx]);
     }
+    idx++;
+    if (idx < static_cast<int>(view.posts.size())) {
+      abs_pos += static_cast<int>(view.posts[idx] >> 3);
+    }
+  }
 }
+
 }  // namespace
 
 int Index::GetFieldTermFrequency(int docId, const std::string& term, char decoration) const {
-    if (docId < 0 || docId >= (int)documents.size()) return 0;
-    Tuple<std::string, PostingList>* t = dictionary.Find(term);
-    if (!t) return 0;
-
-    const auto& doc = documents[docId];
-    int count = 0;
-    auto dec = [](uint32_t p) -> char {
-        uint32_t v = p & 0x7;
-        switch (v) {
-            case 0: return 'b';
-            case 1: return '@';
-            case 2: return '#';
-            case 3: return '$';
-            case 4: return '%';
-            default: return 'x';
-        }
-    };
-    auto del = [](uint32_t p) -> uint32_t { return p >> 3; };
-    walk_field_posts(t->value, doc.start_position, doc.end_position, decoration,
-                     dec, del, [&](int, uint32_t) { count++; });
-    return count;
+  if (!mapped || docId < 0 || docId >= static_cast<int>(n_docs)) return 0;
+  PostingListView v = getPostingList(term);
+  if (!v.is_valid) return 0;
+  const blob_v4::DocRecord* r = Index_DocRecord(*this, base, doc_table_offset, docId);
+  int count = 0;
+  walk_field_posts(v, r->start_position, r->end_position, decoration,
+                   [&](int, uint32_t) { count++; });
+  return count;
 }
 
 std::vector<size_t> Index::GetFieldPositions(int docId, const std::string& term,
                                               char decoration) const {
-    std::vector<size_t> out;
-    if (docId < 0 || docId >= (int)documents.size()) return out;
-    Tuple<std::string, PostingList>* t = dictionary.Find(term);
-    if (!t) return out;
-
-    const auto& doc = documents[docId];
-    auto dec = [](uint32_t p) -> char {
-        uint32_t v = p & 0x7;
-        switch (v) {
-            case 0: return 'b';
-            case 1: return '@';
-            case 2: return '#';
-            case 3: return '$';
-            case 4: return '%';
-            default: return 'x';
-        }
-    };
-    auto del = [](uint32_t p) -> uint32_t { return p >> 3; };
-    walk_field_posts(t->value, doc.start_position, doc.end_position, decoration,
-                     dec, del,
-                     [&](int abs_pos, uint32_t) { out.push_back((size_t)abs_pos); });
-    return out;
+  std::vector<size_t> out;
+  if (!mapped || docId < 0 || docId >= static_cast<int>(n_docs)) return out;
+  PostingListView v = getPostingList(term);
+  if (!v.is_valid) return out;
+  const blob_v4::DocRecord* r = Index_DocRecord(*this, base, doc_table_offset, docId);
+  walk_field_posts(v, r->start_position, r->end_position, decoration,
+                   [&](int abs_pos, uint32_t) { out.push_back(static_cast<size_t>(abs_pos)); });
+  return out;
 }
-
-void Index::Finalize(){
-    dictionary.Optimize(1.5);
-}
-
-// ---- Blob serialization ---------------------------------------------------
-// Custom format per rank. VM handles paging, so we go for simple readable
-// layout rather than mmap-optimized structure.
-namespace {
-constexpr uint64_t BLOB_MAGIC   = 0x494E444558424C42ULL;  // "INDEXBLB"
-constexpr uint64_t BLOB_VERSION = 3;
-
-template <typename T>
-void write_pod(std::ostream& o, const T& v) {
-    o.write(reinterpret_cast<const char*>(&v), sizeof(T));
-}
-
-template <typename T>
-bool read_pod(std::istream& i, T& v) {
-    return static_cast<bool>(i.read(reinterpret_cast<char*>(&v), sizeof(T)));
-}
-
-void write_str(std::ostream& o, const std::string& s) {
-    uint64_t n = s.size();
-    write_pod(o, n);
-    if (n) o.write(s.data(), n);
-}
-
-bool read_str(std::istream& i, std::string& s) {
-    uint64_t n;
-    if (!read_pod(i, n)) return false;
-    s.resize(n);
-    if (n) i.read(s.data(), n);
-    return static_cast<bool>(i);
-}
-
-void write_str_vec(std::ostream& o, const std::vector<std::string>& v) {
-    uint64_t n = v.size();
-    write_pod(o, n);
-    for (const auto& s : v) write_str(o, s);
-}
-
-bool read_str_vec(std::istream& i, std::vector<std::string>& v) {
-    uint64_t n;
-    if (!read_pod(i, n)) return false;
-    v.resize(n);
-    for (uint64_t k = 0; k < n; k++) if (!read_str(i, v[k])) return false;
-    return true;
-}
-
-template <typename T>
-void write_pod_vec(std::ostream& o, const std::vector<T>& v) {
-    uint64_t n = v.size();
-    write_pod(o, n);
-    if (n) o.write(reinterpret_cast<const char*>(v.data()), n * sizeof(T));
-}
-
-template <typename T>
-bool read_pod_vec(std::istream& i, std::vector<T>& v) {
-    uint64_t n;
-    if (!read_pod(i, n)) return false;
-    v.resize(n);
-    if (n) i.read(reinterpret_cast<char*>(v.data()), n * sizeof(T));
-    return static_cast<bool>(i);
-}
-}
-
-bool Index::WriteBlob(const std::string& path) const {
-    std::ofstream o(path, std::ios::binary | std::ios::trunc);
-    if (!o) return false;
-
-    write_pod(o, BLOB_MAGIC);
-    write_pod(o, BLOB_VERSION);
-    write_pod(o, static_cast<uint64_t>(globalPositionCounter));
-
-    // documents
-    write_pod(o, static_cast<uint64_t>(documents.size()));
-    for (const auto& d : documents) {
-        write_pod(o, static_cast<int32_t>(d.doc_id));
-        write_str(o, d.url);
-        write_str_vec(o, d.title_words);
-        write_pod(o, static_cast<int32_t>(d.hop_distance));
-        write_pod(o, static_cast<int32_t>(d.body_length));
-        write_pod(o, static_cast<int32_t>(d.start_position));
-        write_pod(o, static_cast<int32_t>(d.end_position));
-        write_pod(o, d.page_file_rank);
-        write_pod(o, d.page_file_num);
-        write_pod(o, d.page_file_index);
-    }
-
-    // dictionary — count first (iterate once to count, again to write)
-    uint64_t dict_count = 0;
-    for (auto it = const_cast<HashTable<std::string, PostingList>&>(dictionary).begin();
-         it != const_cast<HashTable<std::string, PostingList>&>(dictionary).end(); ++it) {
-        ++dict_count;
-    }
-    write_pod(o, dict_count);
-
-    for (auto it = const_cast<HashTable<std::string, PostingList>&>(dictionary).begin();
-         it != const_cast<HashTable<std::string, PostingList>&>(dictionary).end(); ++it) {
-        write_str(o, it->key);
-        const PostingList& pl = it->value;
-        write_pod_vec(o, pl.posts);
-        write_pod_vec(o, pl.seek_absolutes);
-        write_pod_vec(o, pl.seek_indices);
-        write_pod(o, static_cast<int32_t>(pl.last_abs_pos));
-        write_pod(o, static_cast<int32_t>(pl.num_docs));
-        write_pod(o, static_cast<int32_t>(pl.word_occurrences));
-        write_pod(o, static_cast<int32_t>(pl.last_doc_id));
-    }
-
-    return static_cast<bool>(o);
-}
-
-bool Index::LoadBlob(const std::string& path) {
-    std::ifstream i(path, std::ios::binary);
-    if (!i) return false;
-
-    uint64_t magic, version, gpc;
-    if (!read_pod(i, magic) || magic != BLOB_MAGIC) return false;
-    if (!read_pod(i, version) || version != BLOB_VERSION) return false;
-    if (!read_pod(i, gpc)) return false;
-    globalPositionCounter = static_cast<int>(gpc);
-
-    uint64_t doc_count;
-    if (!read_pod(i, doc_count)) return false;
-    documents.clear();
-    documents.reserve(doc_count);
-    for (uint64_t k = 0; k < doc_count; k++) {
-        DocumentMetadata d;
-        int32_t v;
-        if (!read_pod(i, v)) return false; d.doc_id = v;
-        if (!read_str(i, d.url)) return false;
-        if (!read_str_vec(i, d.title_words)) return false;
-        if (!read_pod(i, v)) return false; d.hop_distance = v;
-        if (!read_pod(i, v)) return false; d.body_length = v;
-        if (!read_pod(i, v)) return false; d.start_position = v;
-        if (!read_pod(i, v)) return false; d.end_position = v;
-        if (!read_pod(i, d.page_file_rank)) return false;
-        if (!read_pod(i, d.page_file_num)) return false;
-        if (!read_pod(i, d.page_file_index)) return false;
-        documents.push_back(std::move(d));
-    }
-
-    uint64_t dict_count;
-    if (!read_pod(i, dict_count)) return false;
-    for (uint64_t k = 0; k < dict_count; k++) {
-        std::string term;
-        if (!read_str(i, term)) return false;
-        PostingList pl;
-        int32_t v;
-        if (!read_pod_vec(i, pl.posts)) return false;
-        if (!read_pod_vec(i, pl.seek_absolutes)) return false;
-        if (!read_pod_vec(i, pl.seek_indices)) return false;
-        if (!read_pod(i, v)) return false; pl.last_abs_pos = v;
-        if (!read_pod(i, v)) return false; pl.num_docs = v;
-        if (!read_pod(i, v)) return false; pl.word_occurrences = v;
-        if (!read_pod(i, v)) return false; pl.last_doc_id = v;
-
-        Tuple<std::string, PostingList>* t = dictionary.Find(term, pl);
-        t->value = std::move(pl);
-    }
-    dictionary.Optimize(1.5);
-    return true;
-}
-
-Index* BuildIndex(){
-    Index* index = new Index();
-
-    int rank = 0;
-    while(true){
-        int fileNum = 0;
-        bool foundFile = false;
-
-        while (true){
-            string filename = "crawled_page_rank_" + to_string(rank) + "_num_" + to_string(fileNum);
-
-            if (load_page_file(filename) != 0) {
-                break;
-            }
-
-            foundFile = true;
-            PageData page;
-
-            int page_index;
-            while ((page_index = get_next_page(page)) != -1) {
-                page.page_file_rank = (u_int64_t)rank;
-                page.page_file_num = (u_int64_t)fileNum;
-                page.page_file_index = (u_int64_t)page_index;
-                index->addDocument(page);
-            }
-
-            close_page_file();
-            fileNum++;
-        }
-        if (!foundFile && rank > 0) {
-            break;
-        }
-        rank++;
-
-    }
-    index->Finalize();
-    return index;
-}
-

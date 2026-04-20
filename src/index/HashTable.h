@@ -69,30 +69,30 @@ template< typename Key, typename Value > class HashTable
          // Search for the key k and return a pointer to the
          // ( key, value ) entry.  If the key is not already
          // in the hash, add it with the initial value.
-
-         // YOUR CODE HERE
+         // single-pass: track tail during the lookup walk so we don't
+         // have to re-walk the chain to append on miss
               uint64_t h = hash(k);
               size_t idx = h % numberOfBuckets;
-              Bucket<Key,Value>* b = buckets[idx];
+              Bucket<Key, Value>* b = buckets[idx];
+              Bucket<Key, Value>* tail = nullptr;
               while (b != nullptr) {
-                  if (compareEqual(b->tuple.key, k)) {
-                      return &b->tuple;
-                  }
+                  if (compareEqual(b->tuple.key, k)) return &b->tuple;
+                  tail = b;
                   b = b->next;
               }
-              Bucket<Key,Value>* nb = new Bucket<Key,Value>(k, h, initialValue);
-              if (buckets[idx] == nullptr) {
+              Bucket<Key, Value>* nb = new Bucket<Key, Value>(k, h, initialValue);
+              nb->next = nullptr;
+              if (tail == nullptr) {
                   buckets[idx] = nb;
               } else {
-                  Bucket<Key, Value>* end = buckets[idx];
-                  while (end->next) {
-                      end = end->next;
-                  }
-                  // nb->next = nullptr, insertion at the end of the linked list;
-                  end->next = nb;
-                  nb->next = nullptr;
+                  tail->next = nb;
               }
               uniqueKeys++;
+              // grow when load factor exceeds 2.0. without this, huge indices
+              // degrade to O(n) chain walks per lookup
+              if (uniqueKeys > numberOfBuckets * 2) {
+                  Optimize(2.0);
+              }
               return &nb->tuple;
          }
 

@@ -8,10 +8,10 @@
 
 class ConstraintSolver {
 private:
-    Index* index;
-    
+    const Index* index;
+
 public:
-    ConstraintSolver(Index* idx);
+    ConstraintSolver(const Index* idx);
     
     // AND query - find documents containing ALL terms
     std::vector<int> FindAndQuery(const std::vector<std::string>& terms);

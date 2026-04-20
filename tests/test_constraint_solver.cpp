@@ -7,8 +7,10 @@
 
 #include "constraint_solver.h"
 #include "index.h"
+#include "index_builder.h"
 #include "isr.h"
 #include "page_data.h"
+#include "test_helpers.h"
 
 namespace {
 
@@ -24,22 +26,20 @@ PageData make_page(const std::string& url,
   return p;
 }
 
-// Small 5-doc corpus with overlapping vocab so AND/OR queries produce
-// several different result sets.
-std::unique_ptr<Index> build_test_index() {
-  auto idx = std::make_unique<Index>();
-  idx->addDocument(make_page("https://example.com/cats",
-      {"My", "Cat"},         {"the", "cat", "sat", "on", "the", "mat"}));
-  idx->addDocument(make_page("https://example.com/dogs",
-      {"A", "Dog"},          {"the", "dog", "ran", "away"}));
-  idx->addDocument(make_page("https://example.com/birds",
-      {"Flying", "Bird"},    {"the", "bird", "flew"}));
-  idx->addDocument(make_page("https://example.com/pets",
-      {"Cat", "And", "Dog"}, {"the", "cat", "and", "the", "dog"}));
-  idx->addDocument(make_page("https://example.com/quickbird",
-      {"Quick", "Bird"},     {"the", "quick", "bird"}));
-  idx->Finalize();
-  return idx;
+// small 5-doc corpus shared across several test cases
+BuiltIndex build_test_index() {
+  return build_and_mmap([](IndexBuilder& b) {
+    b.addDocument(make_page("https://example.com/cats",
+        {"My", "Cat"},         {"the", "cat", "sat", "on", "the", "mat"}));
+    b.addDocument(make_page("https://example.com/dogs",
+        {"A", "Dog"},          {"the", "dog", "ran", "away"}));
+    b.addDocument(make_page("https://example.com/birds",
+        {"Flying", "Bird"},    {"the", "bird", "flew"}));
+    b.addDocument(make_page("https://example.com/pets",
+        {"Cat", "And", "Dog"}, {"the", "cat", "and", "the", "dog"}));
+    b.addDocument(make_page("https://example.com/quickbird",
+        {"Quick", "Bird"},     {"the", "quick", "bird"}));
+  });
 }
 
 std::vector<int> sorted(std::vector<int> v) {
@@ -50,8 +50,8 @@ std::vector<int> sorted(std::vector<int> v) {
 }  // namespace
 
 TEST_CASE("AND queries", "[constraint_solver]") {
-  auto idx = build_test_index();
-  ConstraintSolver solver(idx.get());
+  auto built = build_test_index();
+  ConstraintSolver solver(built.idx.get());
 
   REQUIRE(sorted(solver.FindAndQuery({"the", "cat"}))         == std::vector<int>{0, 3});
   REQUIRE(sorted(solver.FindAndQuery({"the", "bird"}))        == std::vector<int>{2, 4});
@@ -63,8 +63,8 @@ TEST_CASE("AND queries", "[constraint_solver]") {
 }
 
 TEST_CASE("OR queries", "[constraint_solver]") {
-  auto idx = build_test_index();
-  ConstraintSolver solver(idx.get());
+  auto built = build_test_index();
+  ConstraintSolver solver(built.idx.get());
 
   REQUIRE(sorted(solver.FindOrQuery({"cat", "bird"}))    == std::vector<int>{0, 2, 3, 4});
   REQUIRE(sorted(solver.FindOrQuery({"dog", "flew"}))    == std::vector<int>{1, 2, 3});
@@ -72,8 +72,8 @@ TEST_CASE("OR queries", "[constraint_solver]") {
 }
 
 TEST_CASE("ISR walks every doc for a common term", "[isr]") {
-  auto idx = build_test_index();
-  ISR isr(idx.get(), "the");
+  auto built = build_test_index();
+  ISR isr(built.idx.get(), "the");
 
   std::vector<int> docs_visited;
   while (isr.IsValid()) {
@@ -86,38 +86,36 @@ TEST_CASE("ISR walks every doc for a common term", "[isr]") {
 }
 
 TEST_CASE("ISR::SkipToDoc lands on the target doc", "[isr]") {
-  auto idx = build_test_index();
-  ISR isr(idx.get(), "the");
+  auto built = build_test_index();
+  ISR isr(built.idx.get(), "the");
   REQUIRE(isr.SkipToDoc(3));
   REQUIRE(isr.GetCurrentDocId() == 3);
 }
 
 TEST_CASE("ISR::SkipToDoc past end returns false", "[isr]") {
-  auto idx = build_test_index();
-  ISR isr(idx.get(), "the");
+  auto built = build_test_index();
+  ISR isr(built.idx.get(), "the");
   REQUIRE_FALSE(isr.SkipToDoc(99));
 }
 
 TEST_CASE("ISR on missing term is invalid", "[isr]") {
-  auto idx = build_test_index();
-  ISR isr(idx.get(), "quokka");
+  auto built = build_test_index();
+  ISR isr(built.idx.get(), "quokka");
   REQUIRE_FALSE(isr.IsValid());
 }
 
 TEST_CASE("blob round-trip preserves query behavior", "[index][blob]") {
-  auto idx = build_test_index();
-  const std::string path = "test_constraint_solver_roundtrip.blob";
-
-  REQUIRE(idx->WriteBlob(path));
+  // build_and_mmap already exercises the blob round-trip, so this test
+  // re-runs a few queries through a freshly constructed Index from the
+  // same temp file to make sure results stay consistent
+  auto built = build_test_index();
 
   Index reloaded;
-  REQUIRE(reloaded.LoadBlob(path));
-  REQUIRE(reloaded.GetDocumentCount() == idx->GetDocumentCount());
+  REQUIRE(reloaded.LoadBlob(built.path));
+  REQUIRE(reloaded.GetDocumentCount() == built.idx->GetDocumentCount());
 
   ConstraintSolver solver(&reloaded);
   REQUIRE(sorted(solver.FindAndQuery({"the", "cat"}))    == std::vector<int>{0, 3});
   REQUIRE(sorted(solver.FindAndQuery({"cat", "dog"}))    == std::vector<int>{3});
   REQUIRE(sorted(solver.FindOrQuery({"cat", "bird"}))    == std::vector<int>{0, 2, 3, 4});
-
-  std::remove(path.c_str());
 }

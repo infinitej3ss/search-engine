@@ -16,6 +16,7 @@
 #include "search_result.hpp"
 #include "query_distributor.hpp"
 #include "../index/index.h"
+#include "../index/index_builder.h"
 #include "../index/page_data.h"
 #include "../index/constraint_solver.h"
 #include "../query/query_compiler.hpp"
@@ -248,10 +249,23 @@ private:
     }
 
     void load_demo_corpus() {
+        // build the demo index in-memory, write to a tmp V4 blob, then
+        // mmap-load it. that keeps the query path uniform (always mmap)
+        // without needing a separate "in-memory" Index mode
+        IndexBuilder b;
+        for (const auto& page : make_demo_corpus()) b.addDocument(page);
+        b.Finalize();
+
+        std::string tmp = data_dir + "demo_corpus.blob";
+        if (!b.WriteBlobV4(tmp)) {
+            std::fprintf(stderr, "[engine] failed to write demo corpus blob\n");
+            return;
+        }
         auto idx = std::make_unique<Index>();
-        for (const auto& page : make_demo_corpus())
-            idx->addDocument(page);
-        idx->Finalize();
+        if (!idx->LoadBlob(tmp)) {
+            std::fprintf(stderr, "[engine] failed to mmap demo corpus blob\n");
+            return;
+        }
         std::fprintf(stderr, "[engine] loaded demo corpus (%d docs)\n",
                      idx->GetDocumentCount());
         indexes.push_back(std::move(idx));

@@ -23,6 +23,7 @@ list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 # index core: index, isr, constraint solver, page data
 add_library(index_core STATIC
   src/index/index.cpp
+  src/index/index_builder.cpp
   src/index/isr.cpp
   src/index/constraint_solver.cpp
   src/index/Common.cpp

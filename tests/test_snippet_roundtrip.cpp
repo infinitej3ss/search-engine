@@ -9,6 +9,7 @@
 
 #include "engine/search_engine.hpp"
 #include "index.h"
+#include "index_builder.h"
 #include "page_data.h"
 
 namespace {
@@ -120,13 +121,13 @@ TEST_CASE("SearchEngine::search fills snippet from page file",
   REQUIRE(captured.size() == 1);
 
   // build index pointing at that page, capturing rank/num/index
-  Index idx;
+  IndexBuilder idx;
   pd.page_file_rank = 0;
   pd.page_file_num = 0;
   pd.page_file_index = static_cast<u_int64_t>(captured[0].first);
   idx.addDocument(pd);
   idx.Finalize();
-  REQUIRE(idx.WriteBlob(dir + "index_rank_0.blob"));
+  REQUIRE(idx.WriteBlobV4(dir + "index_rank_0.blob"));
 
   // search the engine and verify the snippet mentions "foo"
   // use the real weights file so scores aren't all zero (compute_score

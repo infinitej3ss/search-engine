@@ -1,39 +1,28 @@
 // isr.h
 #pragma once
 
-#include "index.h"  // Need Index class for DocumentMetadata
+#include "index.h"
 
+// index stream reader: steps through one term's posting list, reporting
+// absolute position + decoration as it goes. backed by a read-only
+// PostingListView into the mmap'd index blob
 class ISR {
-private:
-    Index* index;                       // Pointer to index (for metadata lookup)
-    Index::PostingList* postingList;    // The posting list we're iterating
-    int currentPostIdx;                     // Current position in posting list. Which post number (0, 1, 2...)
-    int currentAbsolutePos;                   // Cached current document ID
+ private:
+  const Index* index;
+  Index::PostingListView postingList; // held by value; cheap to copy
+  int currentPostIdx; // current index into postingList.posts
+  int currentAbsolutePos; // current absolute position in the index
 
-    // Helper: find the document ID for the current post index
-    int findCurrentDocId() const;
-    
-public:
-    // Constructor
-    ISR(Index* idx, const std::string& term);
-    
-    // Move to next post
-    bool Next();
+ public:
+  ISR(const Index* idx, const std::string& term);
 
-    bool Seek(int location);
-    
-    // Get current delta (for position reconstruction)
-    int GetCurrentPos() const;
-    
-    // Get decoration info
-    char GetCurrentDecoration() const;
-    
-    // Check if iterator is valid
-    bool IsValid() const;
+  bool Next();
+  bool Seek(int location);
+  int GetCurrentPos() const;
+  char GetCurrentDecoration() const;
+  bool IsValid() const;
 
-    // New methods for constraint solver
-    int GetCurrentDocId() const;    // Returns document ID of current post
-    bool SkipToDoc(int targetDocId);   // Skips to the first post with doc ID >= targetDocId
-    
-   
+  // for constraint solver use
+  int GetCurrentDocId() const;
+  bool SkipToDoc(int targetDocId);
 };

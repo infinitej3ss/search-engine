@@ -2,7 +2,7 @@
 #include "constraint_solver.h"
 #include <set>
 
-ConstraintSolver::ConstraintSolver(Index* idx) : index(idx) {}
+ConstraintSolver::ConstraintSolver(const Index* idx) : index(idx) {}
 
 // AND query - find documents containing ALL terms
 std::vector<int> ConstraintSolver::FindAndQuery(const std::vector<std::string>& terms) {

@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-#include "index/index.h"
+#include "index/index_builder.h"
 #include "index/page_data.h"
 
 std::vector<std::vector<std::string>> get_page_file_names(const std::string& dir);
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
         if (!selected_ranks.empty() && selected_ranks.count(rank) == 0) {
             continue;
         }
-        Index idx;
+        IndexBuilder idx;
         int rank_docs = 0;
 
         for (auto filename : file_names[rank]) {
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
         }
 
         std::string out = "index_rank_" + std::to_string(rank) + ".blob";
-        if (!idx.WriteBlob(out)) {
+        if (!idx.WriteBlobV4(out)) {
             std::fprintf(stderr, "rank %d: failed to write %s\n", static_cast<int>(rank), out.c_str());
             return 1;
         }
