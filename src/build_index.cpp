@@ -24,6 +24,29 @@ static u_int64_t peek_num_pages(const std::string& path) {
     return h.num_pages;
 }
 
+// budgets for pathological input. reasonable crawler pages have at most a
+// few thousand body words; anything beyond this cap is almost certainly a bug
+// the file timeout bounds damage from any bad doc we can't preempt
+constexpr size_t MAX_BODY_WORDS = 100000;
+constexpr size_t MAX_TITLE_WORDS = 2000;
+constexpr size_t MAX_ANCHOR_WORDS = 50000;
+constexpr double PER_FILE_TIMEOUT_SECS = 300.0;  // 5 min
+
+struct SkippedDoc {
+    std::string url;
+    std::string filename;
+    size_t body_words = 0;
+    size_t title_words = 0;
+    size_t anchor_words = 0;
+};
+
+struct TruncatedFile {
+    std::string path;
+    int docs_added_before_skip = 0;
+    u_int64_t expected_pages = 0;
+    double seconds_spent = 0;
+};
+
 static std::string format_hms(double seconds) {
     if (seconds < 0 || !std::isfinite(seconds)) return "--:--:--";
     long s = static_cast<long>(seconds);
@@ -99,6 +122,9 @@ int main(int argc, char** argv) {
         auto t_start = std::chrono::steady_clock::now();
         auto t_last_print = t_start;
 
+        std::vector<SkippedDoc> skipped_docs;
+        std::vector<TruncatedFile> truncated_files;
+
         size_t file_idx = 0;
         for (auto filename : file_names[rank]) {
             file_idx++;
@@ -110,15 +136,60 @@ int main(int argc, char** argv) {
             if (load_page_file(filename) != 0) continue;
 
             u_int64_t file_num = get_page_file_num(filename);
+            auto t_file_start = std::chrono::steady_clock::now();
+            int file_docs_added = 0;
 
             PageData page;
             int page_index;
             while ((page_index = get_next_page(page)) != -1) {
+                // pre-check: skip pathological docs without running addDocument
+                if (page.words.size() > MAX_BODY_WORDS ||
+                    page.titlewords.size() > MAX_TITLE_WORDS ||
+                    page.anchor_text.size() > MAX_ANCHOR_WORDS) {
+                    SkippedDoc sd;
+                    sd.url = page.url;
+                    sd.filename = filename;
+                    sd.body_words = page.words.size();
+                    sd.title_words = page.titlewords.size();
+                    sd.anchor_words = page.anchor_text.size();
+                    skipped_docs.push_back(std::move(sd));
+                    std::fprintf(stderr,
+                                 "\n  skip doc (oversized): body=%zu title=%zu anchor=%zu url=%s\n",
+                                 page.words.size(),
+                                 page.titlewords.size(),
+                                 page.anchor_text.size(),
+                                 page.url.c_str());
+                    std::fflush(stderr);
+                    continue;
+                }
+
                 page.page_file_rank = (u_int64_t)rank;
                 page.page_file_num = file_num;
                 page.page_file_index = (u_int64_t)page_index;
                 idx.addDocument(page);
                 rank_docs++;
+                file_docs_added++;
+
+                // file timeout: checked only between docs, so this doesn't
+                // interrupt a single slow addDocument call
+                double file_elapsed = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - t_file_start).count();
+                if (file_elapsed > PER_FILE_TIMEOUT_SECS) {
+                    TruncatedFile tf;
+                    tf.path = filename;
+                    tf.docs_added_before_skip = file_docs_added;
+                    tf.expected_pages = file_pages;
+                    tf.seconds_spent = file_elapsed;
+                    truncated_files.push_back(std::move(tf));
+                    std::fprintf(stderr,
+                                 "\n  file budget exceeded (%.0fs > %.0fs), abandoning after %d/%llu docs: %s\n",
+                                 file_elapsed, PER_FILE_TIMEOUT_SECS,
+                                 file_docs_added,
+                                 static_cast<unsigned long long>(file_pages),
+                                 filename.c_str());
+                    std::fflush(stderr);
+                    break;
+                }
 
                 // chrono::now is cheap: check every doc so true stalls surface
                 auto now = std::chrono::steady_clock::now();
@@ -179,6 +250,24 @@ int main(int argc, char** argv) {
         std::printf("rank %zu: %d docs -> %s (write %s)\n",
                     rank, rank_docs, out.c_str(), format_hms(write_secs).c_str());
         std::fflush(stdout);
+
+        if (!truncated_files.empty() || !skipped_docs.empty()) {
+            std::printf("rank %zu: %zu truncated file(s), %zu skipped doc(s)\n",
+                        rank, truncated_files.size(), skipped_docs.size());
+            for (const auto& tf : truncated_files) {
+                std::printf("  truncated: %s (%d/%llu docs, %.1fs)\n",
+                            tf.path.c_str(), tf.docs_added_before_skip,
+                            static_cast<unsigned long long>(tf.expected_pages),
+                            tf.seconds_spent);
+            }
+            for (const auto& sd : skipped_docs) {
+                std::printf("  skipped:   body=%zu title=%zu anchor=%zu [%s] %s\n",
+                            sd.body_words, sd.title_words, sd.anchor_words,
+                            sd.filename.c_str(), sd.url.c_str());
+            }
+            std::fflush(stdout);
+        }
+
         total_docs += rank_docs;
     }
     
