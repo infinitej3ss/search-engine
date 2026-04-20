@@ -34,13 +34,16 @@ struct RankerInput {
   std::string url;
 
   // t2
-  size_t word_count;
-  double content_to_html_ratio;
+  bool is_https;
+  size_t pages_per_domain; // probably skipping
+  size_t hop_distance;
 
   // t3
-  bool is_https;
-  size_t pages_per_domain;
-  size_t hop_distance;
+  size_t word_count; // maybe skipping?
+  double content_to_html_ratio; // probably skipping
+
+  // t4
+  std::string title;
 };
 
 // t1 signal functions — each takes a parsed url and returns a score in [0, 1]
@@ -90,10 +93,10 @@ constexpr std::array<T1SignalFn, T1_NUM_SIGNALS> T1_SIGNALS = {
   blacklist_rank,
 };
 
-// weights — tune via eval (tests/test_static_eval.cpp)
+// weights — loaded from config/weights.txt at runtime
 // order: tld, url_len, path_depth, subdomain_depth, ip_in_url, special_char_density, blacklist
 inline std::array<double, T1_NUM_SIGNALS> T1_WEIGHTS = {
-  3.0, 1.0, 1.0, 0.5, 1.0, 1.0, 1.0
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 };
 
 inline double t1_rank(const ParsedUrl& url) {
@@ -110,14 +113,24 @@ inline double t1_rank(const ParsedUrl& url) {
   return weight_sum > 0.0 ? total / weight_sum : 0.0;
 }
 
+// TODO t2 — domain/hop-based ranking (hop based only currently)
+inline double t2_rank(const RankerInput& input) {
+  return 1.0 / (1 + input.hop_distance);
+}
+
 // TODO t2 — content-based ranking
-inline double t2_rank(const RankerInput& /* input */) {
+inline double t3_rank(const RankerInput& /* input */) {
   return 1.0;
 }
 
-// TODO t3 — domain/hop-based ranking
-inline double t3_rank(const RankerInput& /* input */) {
-  return 1.0;
+inline double t4_rank(const RankerInput& input) {
+  size_t len = input.title.size();
+  if (len <= 100) return 1.0;
+
+  size_t excess = len - 100;
+  double penalty = 1.0 - 0.005 * excess;
+
+  return std::max(0.5, penalty);
 }
 
 class StaticRanker {
@@ -136,8 +149,8 @@ public:
   double rank() {
     if (parsed_url.is_asset) return -1.0;
 
-    return t1_rank(parsed_url);
+    return t1_rank(parsed_url) * t2_rank(input) * t4_rank(input);
 
-    // TODO add t2, t3 later
+    // TODO add t3 later
   }
 };

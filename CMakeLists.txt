@@ -7,31 +7,74 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Catch2 — fetched at configure time
 # https://github.com/catchorg/Catch2/blob/devel/docs/cmake-integration.md
 Include(FetchContent)
-
 FetchContent_Declare(
   Catch2
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG        v3.8.1 # or a later release
+  GIT_TAG        v3.8.1
+)
+FetchContent_MakeAvailable(Catch2)
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+
+# ---- libraries -----------------------------------------------------------
+
+# index core: index, isr, constraint solver, page data
+add_library(index_core STATIC
+  src/index/index.cpp
+  src/index/index_builder.cpp
+  src/index/isr.cpp
+  src/index/constraint_solver.cpp
+  src/index/Common.cpp
+  src/index/page_data.cpp
+)
+target_include_directories(index_core PUBLIC
+  ${CMAKE_SOURCE_DIR}/src/index
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
 )
 
-FetchContent_MakeAvailable(Catch2)
+# ---- executables ---------------------------------------------------------
 
-list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+# standalone query engine (cli demo)
+add_executable(engine src/main.cpp)
+target_link_libraries(engine PRIVATE index_core)
+
+# index builder: reads crawler page files, writes per-rank blobs
+add_executable(build_index src/build_index.cpp)
+target_link_libraries(build_index PRIVATE index_core)
+
+# search server: linuxtinyserver + search plugin
+add_executable(search_server
+  server/LinuxTinyServer.cpp
+  server/SearchPlugin.cpp
+)
+target_include_directories(search_server PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(search_server PRIVATE index_core)
+
+# shard server: one runs per shard machine. configured via SHARD_DATA_DIR env var
+add_executable(shard_server
+  server/LinuxTinyServer.cpp
+  server/ShardPlugin.cpp
+)
+target_include_directories(shard_server PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}
+)
+target_link_libraries(shard_server PRIVATE index_core)
+
+# ---- tests ---------------------------------------------------------------
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
 add_executable(tests ${TEST_SOURCES})
-target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(tests PRIVATE Catch2::Catch2WithMain index_core)
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 enable_testing()
-
 include(CTest)
 include(Catch)
 catch_discover_tests(tests)
-
-# main executable
-add_executable(engine src/main.cpp)
-target_include_directories(engine PRIVATE ${CMAKE_SOURCE_DIR}/src)
-
