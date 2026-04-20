@@ -1,0 +1,56 @@
+#pragma once
+
+#include <string>
+#include <vector>
+
+struct FrontierUrl {
+    u_int32_t distance_from_seedlist;
+    std::string url;
+    std::vector<std::string> anchor_text;
+};
+
+// inserts url into the frontier
+//
+// Returns:
+//      0 on success, -1 on failure
+int insert_url(const FrontierUrl& input_url);
+
+// insert vector of urls
+//
+// Returns:
+//      0 on success, -1 on failure
+int insert_url_vector(std::vector<FrontierUrl>& url_vector);
+
+// tests url against blacklist by iterating though root paths
+bool is_in_blacklist(const std::string &url);
+
+// adds a url to blacklist, preventing it from being inserted or retreived from the frontier
+void blacklist_url(const std::string &url);
+
+// retreives url from the frontier
+FrontierUrl get_url();
+
+// writes a vector of FrontierUrls to buffer and increments buffer past the end of the vector
+void serialize_frontier_url_vector(void** buffer, const std::vector<FrontierUrl>& v);
+
+// reads a vector of FrontierUrls from buffer and increments buffer past the end of the vector
+std::vector<FrontierUrl> deserialize_frontier_url_vector(void** buffer);
+
+// initializes the frontier file directory
+//
+// Parameters:
+//      dir - directory to initialize from
+//
+// Returns:
+//      0 on success, -1 on failure
+int initialize_frontier_file_dir(const std::string& dir);
+
+// calculates size of a vector of frontier urls after serialization
+u_int64_t serialized_frontier_url_vector_size(const std::vector<FrontierUrl> &v);
+
+void write_frontier_filters();
+
+void load_frontier_filters();
+
+// inserts url manually into frontier, skipping writing to file
+void insert_seed_list(FrontierUrl &u);

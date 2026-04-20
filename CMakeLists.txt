@@ -6,8 +6,8 @@ project(SearchEngine VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_FLAGS "-O3")
 
-# Catch2 — fetched at configure time
 # https://github.com/catchorg/Catch2/blob/devel/docs/cmake-integration.md
 Include(FetchContent)
 FetchContent_Declare(
@@ -17,6 +17,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+
+find_package(OpenSSL COMPONENTS SSL)
 
 # ---- libraries -----------------------------------------------------------
 
@@ -66,6 +68,24 @@ target_include_directories(shard_server PRIVATE
   ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(shard_server PRIVATE index_core)
+
+# crawler
+add_executable(crawler src/crawler/crawler.cpp)
+target_link_libraries(crawler PRIVATE index_core OpenSSL::SSL)
+target_include_directories(crawler PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/src/crawler
+  ${CMAKE_SOURCE_DIR}/src/ranker
+)
+
+# majestic million parser
+add_executable(majestic src/majestic_million_parser.cpp)
+target_link_libraries(majestic PRIVATE index_core OpenSSL::SSL)
+target_include_directories(majestic PRIVATE
+  ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/src/crawler
+  ${CMAKE_SOURCE_DIR}/src/ranker
+)
 
 # ---- tests ---------------------------------------------------------------
 

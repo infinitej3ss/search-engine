@@ -1,6 +1,11 @@
 eval/.venv/
 
 build/
+.cache
+.DS_Store
+
+.vscode/
+crawler_test_files/majestic_million.csv
 .cache/
 .vscode/
 .DS_Store

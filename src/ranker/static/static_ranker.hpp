@@ -1,22 +1,50 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <string>
 #include <unordered_set>
-#include <algorithm>
 
 #include "url_parser.hpp"
 
 // four tiers: top ranked, common commercial, bottom ranked, everything else
 inline const std::unordered_set<std::string> TOP_RANKED_TLDS = {
-  "gov", "edu", "mil", "int",
+    "gov",
+    "edu",
+    "mil",
+    "int",
 };
 
 // commercial, country
 inline const std::unordered_set<std::string> MIDDLE_RANKED_TLDS = {
-  "com", "org", "net", "io", "dev", "co", "app", "info",
-  "uk", "de", "ca", "au", "jp", "fr", "nl", "ch", "se", "no",
-  "fi", "dk", "nz", "ie", "at", "be", "it", "es", "pt", "kr",
+    "com",
+    "org",
+    "net",
+    "io",
+    "dev",
+    "co",
+    "app",
+    "info",
+    "uk",
+    "de",
+    "ca",
+    "au",
+    "jp",
+    "fr",
+    "nl",
+    "ch",
+    "se",
+    "no",
+    "fi",
+    "dk",
+    "nz",
+    "ie",
+    "at",
+    "be",
+    "it",
+    "es",
+    "pt",
+    "kr",
 };
 
 // spam domains
@@ -115,7 +143,7 @@ inline double t1_rank(const ParsedUrl& url) {
 
 // TODO t2 — domain/hop-based ranking (hop based only currently)
 inline double t2_rank(const RankerInput& input) {
-  return 1.0 / (1 + input.hop_distance);
+    return 1.0 - (0.05 * (input.hop_distance / (1 + input.hop_distance)));
 }
 
 // TODO t2 — content-based ranking

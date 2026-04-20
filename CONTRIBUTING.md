@@ -1,6 +1,12 @@
-## Contributing
+## contributing
 
-### Build
+### requirements
+
+- CMake 3.20+
+- Ninja
+- a C++20 compiler (clang or gcc)
+
+### building
 
 ```bash
 cmake --preset default
