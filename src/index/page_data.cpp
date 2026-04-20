@@ -58,6 +58,7 @@ int load_page_file(const std::string& file_name) {
         return -1;
     }
     VALID_PAGE_FILE = true;
+    PAGE_FILE_CORRUPT = false;
     pthread_mutex_unlock(&PAGE_FILE_MUTEX);
     return 0;
 }
@@ -103,8 +104,14 @@ int get_next_page(PageData& pd) {
     pd.titlewords = deserialize_string_vector(&CURRENT_PAGE_FILE_LOCATION);
     pd.anchor_text = deserialize_string_vector(&CURRENT_PAGE_FILE_LOCATION);
 
+    if (PAGE_FILE_CORRUPT) {
+        VALID_PAGE_FILE = false;
+        pthread_mutex_unlock(&PAGE_FILE_MUTEX);
+        return -1;
+    }
+
     NUM_PAGE_FILE_ENTRIES--;
-    
+
     pthread_mutex_unlock(&PAGE_FILE_MUTEX);
     return index_of_page;
 }
@@ -239,14 +246,36 @@ void serialize_string(void** buffer, const std::string& s){
     *buffer = (u_int8_t*)*buffer + size;
 }
 
+// returns true if [buffer, buffer + n) lies entirely within the mmap
+// region. used to bail on corrupt size prefixes before memcpy reads
+// past the mapped range and segfaults
+static bool in_bounds(const void* buffer, u_int64_t n) {
+    if (!MAPPED_PAGE_FILE || MAPPED_PAGE_FILE_SIZE == 0) return false;
+    const u_int8_t* start = (const u_int8_t*)MAPPED_PAGE_FILE;
+    const u_int8_t* end = start + MAPPED_PAGE_FILE_SIZE;
+    const u_int8_t* p = (const u_int8_t*)buffer;
+    return p >= start && p <= end && n <= (u_int64_t)(end - p);
+}
+
 // reads serialized string from buffer and increments buffer past the end of the string
 std::string deserialize_string(void** buffer) {
     std::string s;
     u_int16_t size; // strings longer than the uin16 max are automatically truncated to save space on disk
 
+    if (!in_bounds(*buffer, sizeof(u_int16_t))) {
+        PAGE_FILE_CORRUPT = true;
+        return s;
+    }
+
     // resize string to serialized value
     memcpy(&size, *buffer, sizeof(u_int16_t));
     *buffer = (u_int8_t*)*buffer + sizeof(u_int16_t);
+
+    if (!in_bounds(*buffer, size)) {
+        PAGE_FILE_CORRUPT = true;
+        return s;
+    }
+
     s.resize(size);
 
     // read contents of string
@@ -275,14 +304,29 @@ std::vector<std::string> deserialize_string_vector(void** buffer) {
     std::vector<std::string> v;
     u_int64_t size;
 
-    // resize vector to serialized value
+    if (!in_bounds(*buffer, sizeof(u_int64_t))) {
+        PAGE_FILE_CORRUPT = true;
+        return v;
+    }
+
     memcpy(&size, *buffer, sizeof(u_int64_t));
     *buffer = (u_int8_t*)*buffer + sizeof(u_int64_t);
+
+    // a vector size larger than the remaining bytes cannot possibly
+    // be legitimate (each element is at least sizeof(u_int16_t) bytes)
+    u_int64_t remaining =
+        (u_int8_t*)MAPPED_PAGE_FILE + MAPPED_PAGE_FILE_SIZE - (u_int8_t*)*buffer;
+    if (size > remaining / sizeof(u_int16_t)) {
+        PAGE_FILE_CORRUPT = true;
+        return v;
+    }
+
     v.resize(size);
 
     // read strings
     for(u_int64_t i = 0; i < size; i++) {
         v.at(i) = deserialize_string(buffer);
+        if (PAGE_FILE_CORRUPT) { v.resize(i); break; }
     }
 
     return std::move(v);

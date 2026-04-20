@@ -42,6 +42,10 @@ inline void* MAPPED_PAGE_FILE;
 inline u_int64_t MAPPED_PAGE_FILE_SIZE = 0;
 inline void* CURRENT_PAGE_FILE_LOCATION;
 inline bool VALID_PAGE_FILE = false;
+// set by deserialize_* when a read would cross the mmap boundary. a
+// truthy value means the current page file has a corrupt size prefix
+// and no further pages from it should be trusted
+inline bool PAGE_FILE_CORRUPT = false;
 inline u_int64_t NUM_PAGE_FILE_ENTRIES = 0;
 inline u_int64_t PAGE_FILE_SIZE_BYTES = 0;
 inline pthread_mutex_t PAGE_FILE_MUTEX = PTHREAD_MUTEX_INITIALIZER;

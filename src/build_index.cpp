@@ -216,6 +216,21 @@ int main(int argc, char** argv) {
                     t_last_print = now;
                 }
             }
+            if (PAGE_FILE_CORRUPT) {
+                TruncatedFile tf;
+                tf.path = filename;
+                tf.docs_added_before_skip = file_docs_added;
+                tf.expected_pages = file_pages;
+                tf.seconds_spent = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - t_file_start).count();
+                truncated_files.push_back(std::move(tf));
+                std::fprintf(stderr,
+                             "\n  file corrupt, abandoning after %d/%llu docs: %s\n",
+                             file_docs_added,
+                             static_cast<unsigned long long>(file_pages),
+                             filename.c_str());
+                std::fflush(stderr);
+            }
             close_page_file();
         }
         std::fprintf(stderr, "\n");
