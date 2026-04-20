@@ -1,0 +1,109 @@
+#pragma once
+
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+#include "../src/ranker/static/static_ranker.hpp"
+
+// dynamic weight profile. one instance per query-intent class.
+// inline (not constexpr) so load_and_apply_weights can overwrite at runtime.
+struct WeightProfile {
+  double w_metastream;  // T1
+  double w_span;        // T2
+  double w_quality;     // T3
+  double w_bm25;        // T4
+};
+
+// defaults are zero — must load from config/weights.txt before ranking
+inline WeightProfile GENERAL      = {0.0, 0.0, 0.0, 0.0};
+inline WeightProfile NAVIGATIONAL = {0.0, 0.0, 0.0, 0.0};
+
+// power-weight alpha for static^α × dynamic^(1-α) combination.
+// 0.5 = equal weight, <0.5 = favor dynamic (relevance), >0.5 = favor static (quality)
+inline double COMBINE_ALPHA = 0.4;
+
+// static score floor — prevents low-quality urls from zeroing out relevant pages
+inline double STATIC_FLOOR = 0.15;
+
+// t1 metastream field weights (best-of per query term)
+inline double W_FIELD_URL   = 1.0;
+inline double W_FIELD_TITLE = 0.8;
+inline double W_FIELD_BODY  = 0.3;
+
+// t2 span title/body blend
+inline double SPAN_TITLE_WEIGHT = 0.7;
+
+// bm25 sigmoid normalization steepness
+inline double SIGMOID_K = 0.1;
+
+// content quality penalty thresholds
+inline int    TITLE_MAX_REPEAT = 3;
+inline double NON_LATIN_PENALTY_SCALE = 2.0;  // multiplied by non-latin ratio
+inline double NON_LATIN_FLOOR = 0.2;          // minimum penalty (max suppression)
+
+// shard-side tuning (only used when running as a shard)
+inline double SHARD_GOOD_THRESHOLD = 0.3;   // per-result score to count as "good"
+inline int    SHARD_GOOD_COUNT = 30;        // good results before early-stop
+inline int    SHARD_MAX_RESULTS = 100;      // per-level cap on emitted results
+
+// Reads "key value" lines from `path` and assigns them to T1_WEIGHTS and the
+// profile globals. Blank and `#`-prefixed lines are skipped. Unknown keys and
+// parse errors warn on stderr but don't throw — a typo shouldn't kill the
+// engine during tuning.
+// Returns false only when the file couldn't be opened.
+inline bool load_and_apply_weights(const std::string& path) {
+  std::ifstream in(path);
+  if (!in.is_open()) return false;
+
+  std::string line;
+  while (std::getline(in, line)) {
+    size_t start = line.find_first_not_of(" \t");
+    if (start == std::string::npos || line[start] == '#') continue;
+
+    std::istringstream iss(line);
+    std::string key;
+    double value;
+    if (!(iss >> key >> value)) {
+      std::cerr << "[weights] bad line: " << line << "\n";
+      continue;
+    }
+
+    // keep order in sync with T1_SIGNALS in static_ranker.hpp
+    if      (key == "tld")                   T1_WEIGHTS[0] = value;
+    else if (key == "url_len")               T1_WEIGHTS[1] = value;
+    else if (key == "path_depth")            T1_WEIGHTS[2] = value;
+    else if (key == "subdomain_depth")       T1_WEIGHTS[3] = value;
+    else if (key == "ip_in_url")             T1_WEIGHTS[4] = value;
+    else if (key == "special_char_density")  T1_WEIGHTS[5] = value;
+    else if (key == "blacklist")             T1_WEIGHTS[6] = value;
+
+    else if (key == "profile.general.metastream")      GENERAL.w_metastream      = value;
+    else if (key == "profile.general.span")            GENERAL.w_span            = value;
+    else if (key == "profile.general.quality")         GENERAL.w_quality         = value;
+    else if (key == "profile.general.bm25")            GENERAL.w_bm25            = value;
+    else if (key == "profile.navigational.metastream") NAVIGATIONAL.w_metastream = value;
+    else if (key == "profile.navigational.span")       NAVIGATIONAL.w_span       = value;
+    else if (key == "profile.navigational.quality")    NAVIGATIONAL.w_quality    = value;
+    else if (key == "profile.navigational.bm25")       NAVIGATIONAL.w_bm25       = value;
+
+    else if (key == "combine_alpha")                   COMBINE_ALPHA             = value;
+    else if (key == "static_floor")                    STATIC_FLOOR              = value;
+    else if (key == "field.url")                       W_FIELD_URL               = value;
+    else if (key == "field.title")                     W_FIELD_TITLE             = value;
+    else if (key == "field.body")                      W_FIELD_BODY              = value;
+    else if (key == "span.title_weight")               SPAN_TITLE_WEIGHT         = value;
+    else if (key == "sigmoid_k")                       SIGMOID_K                 = value;
+    else if (key == "penalty.title_max_repeat")        TITLE_MAX_REPEAT          = static_cast<int>(value);
+    else if (key == "penalty.non_latin_scale")         NON_LATIN_PENALTY_SCALE   = value;
+    else if (key == "penalty.non_latin_floor")         NON_LATIN_FLOOR           = value;
+
+    else if (key == "shard.good_threshold")            SHARD_GOOD_THRESHOLD      = value;
+    else if (key == "shard.good_count")                SHARD_GOOD_COUNT          = static_cast<int>(value);
+    else if (key == "shard.max_results")               SHARD_MAX_RESULTS         = static_cast<int>(value);
+
+    else std::cerr << "[weights] unknown key: " << key << "\n";
+  }
+  return true;
+}

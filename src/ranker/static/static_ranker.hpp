@@ -51,105 +51,94 @@ inline const std::unordered_set<std::string> MIDDLE_RANKED_TLDS = {
 // https://blog.cloudflare.com/top-level-domains-email-phishing-threats/
 // https://www.spamhaus.org/resource-hub/domain-reputation/the-most-abused-top-level-domains-in-2018/
 inline const std::unordered_set<std::string> BOTTOM_RANKED_TLDS = {
-    "tk",
-    "ml",
-    "ga",
-    "gq",
-    "cf",
-    "uno",
-    "sbs",
-    "best",
-    "beauty",
-    "top",
-    "hair",
-    "monster",
-    "cyou",
-    "wiki",
-    "makeup",
-    "bar",
-    "pw",
-    "bit",
+  "tk", "ml", "ga", "gq", "cf",
+  "uno", "sbs", "best", "beauty", "top", "hair", "monster",
+  "cyou", "wiki", "makeup",
+  "bar", "pw", "bit",
 };
 
 struct RankerInput {
-    // t1
-    std::string url;
+  // t1
+  std::string url;
 
-    // t2
-    bool is_https;
-    size_t pages_per_domain;  // probably skipping
-    size_t hop_distance;
+  // t2
+  bool is_https;
+  size_t pages_per_domain; // probably skipping
+  size_t hop_distance;
 
-    // t3
-    size_t word_count;             // maybe skipping?
-    double content_to_html_ratio;  // probably skipping
+  // t3
+  size_t word_count; // maybe skipping?
+  double content_to_html_ratio; // probably skipping
+
+  // t4
+  std::string title;
 };
 
 // t1 signal functions — each takes a parsed url and returns a score in [0, 1]
 
 inline double tld_rank(const ParsedUrl& url) {
-    if (TOP_RANKED_TLDS.contains(url.tld)) return 1.0;
-    if (MIDDLE_RANKED_TLDS.contains(url.tld)) return 0.7;
-    if (BOTTOM_RANKED_TLDS.contains(url.tld)) return 0.1;
-    return 0.4;
+  if (TOP_RANKED_TLDS.contains(url.tld)) return 1.0;
+  if (MIDDLE_RANKED_TLDS.contains(url.tld)) return 0.7;
+  if (BOTTOM_RANKED_TLDS.contains(url.tld)) return 0.1;
+  return 0.4;
 }
 
 inline double url_len_rank(const ParsedUrl& url) {
-    return 1.0 / (1.0 + url.len / 80.0);
+  return 1.0 / (1.0 + url.len / 80.0);
 }
 
 inline double path_depth_rank(const ParsedUrl& url) {
-    return 1.0 / (1.0 + url.path_depth);
+  return 1.0 / (1.0 + url.path_depth);
 }
 
 inline double subdomain_depth_rank(const ParsedUrl& url) {
-    return 1.0 / (1.0 + std::max(0.0, static_cast<double>(url.subdomain_depth) - 1.0));
+  return 1.0 / (1.0 + std::max(0.0, static_cast<double>(url.subdomain_depth) - 1.0));
 }
 
 inline double ip_in_url_rank(const ParsedUrl& url) {
-    return url.ip_in_url ? 0.0 : 1.0;
+  return url.ip_in_url ? 0.0 : 1.0;
 }
 
 inline double special_char_density_rank(const ParsedUrl& url) {
-    return 1.0 - url.special_char_density;
+  return 1.0 - url.special_char_density;
 }
 
 inline double blacklist_rank(const ParsedUrl& url) {
-    return url.blacklist_in_url ? 0.0 : 1.0;
+  return url.blacklist_in_url ? 0.0 : 1.0;
 }
 
 constexpr size_t T1_NUM_SIGNALS = 7;
 
-using T1SignalFn = double (*)(const ParsedUrl&);
+using T1SignalFn = double(*)(const ParsedUrl&);
 
 constexpr std::array<T1SignalFn, T1_NUM_SIGNALS> T1_SIGNALS = {
-    tld_rank,
-    url_len_rank,
-    path_depth_rank,
-    subdomain_depth_rank,
-    ip_in_url_rank,
-    special_char_density_rank,
-    blacklist_rank,
+  tld_rank,
+  url_len_rank,
+  path_depth_rank,
+  subdomain_depth_rank,
+  ip_in_url_rank,
+  special_char_density_rank,
+  blacklist_rank,
 };
 
-// weights — tune via eval (tests/test_static_eval.cpp)
+// weights — loaded from config/weights.txt at runtime
 // order: tld, url_len, path_depth, subdomain_depth, ip_in_url, special_char_density, blacklist
-// TODO refactor into config
 inline std::array<double, T1_NUM_SIGNALS> T1_WEIGHTS = {
-    3.0, 1.0, 1.0, 0.5, 1.0, 2.0, 1.0};
+  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+};
 
 inline double t1_rank(const ParsedUrl& url) {
-    double total = 0.0;
-    double weight_sum = 0.0;
+  double total = 0.0;
+  double weight_sum = 0.0;
 
-    for (size_t i = 0; i < T1_NUM_SIGNALS; i++) {
-        if (T1_WEIGHTS[i] != 0.0) {
-            total += T1_WEIGHTS[i] * T1_SIGNALS[i](url);
-            weight_sum += T1_WEIGHTS[i];
-        }
+  for (size_t i = 0; i < T1_NUM_SIGNALS; i++) {
+    if (T1_WEIGHTS[i] != 0.0) {
+      total += T1_WEIGHTS[i] * T1_SIGNALS[i](url);
+      weight_sum += T1_WEIGHTS[i];
     }
+  }
 
-    return weight_sum > 0.0 ? total / weight_sum : 0.0;
+  return weight_sum > 0.0 ? total / weight_sum : 0.0;
 }
 
 // TODO t2 — domain/hop-based ranking (hop based only currently)
@@ -159,27 +148,37 @@ inline double t2_rank(const RankerInput& input) {
 
 // TODO t2 — content-based ranking
 inline double t3_rank(const RankerInput& /* input */) {
-    return 1.0;
+  return 1.0;
+}
+
+inline double t4_rank(const RankerInput& input) {
+  size_t len = input.title.size();
+  if (len <= 100) return 1.0;
+
+  size_t excess = len - 100;
+  double penalty = 1.0 - 0.005 * excess;
+
+  return std::max(0.5, penalty);
 }
 
 class StaticRanker {
-   private:
-    RankerInput input;
-    ParsedUrl parsed_url;
+private:
+  RankerInput input;
+  ParsedUrl parsed_url;
 
-   public:
-    StaticRanker(const RankerInput& input_in) : input(input_in) {
-        UrlParser parser(input.url);
-        parsed_url = parser.parse();
-    }
+public:
+  StaticRanker(const RankerInput& input_in) : input(input_in) {
+    UrlParser parser(input.url);
+    parsed_url = parser.parse();
+  }
 
-    // returns score in [0.0, 1.0] for normal pages
-    // returns -1.0 for hard exclusions (assets, non-content)
-    double rank() {
-        if (parsed_url.is_asset) return -1.0;
+  // returns score in [0.0, 1.0] for normal pages
+  // returns -1.0 for hard exclusions (assets, non-content)
+  double rank() {
+    if (parsed_url.is_asset) return -1.0;
 
-        return t1_rank(parsed_url) * t2_rank(input);
+    return t1_rank(parsed_url) * t2_rank(input) * t4_rank(input);
 
-        // TODO add t3 later
-    }
+    // TODO add t3 later
+  }
 };

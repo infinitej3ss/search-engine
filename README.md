@@ -3,6 +3,8 @@
 
 A group of elite cybercriminals, spread around the globe with one common interest: granting free information access to everyone on earth
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and development workflow
+
 **Team**
 - Abby ([abbytroost](https://github.com/abbytroost))
 - Claudia ([claudire](https://github.com/claudire))

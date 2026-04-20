@@ -6,3 +6,34 @@ build/
 
 .vscode/
 crawler_test_files/majestic_million.csv
+.cache/
+.vscode/
+.DS_Store
+.claude/
+
+# generated index blobs
+*.blob
+
+# compiled binaries
+build_index
+test_ranker
+test_load_blobs
+server/LinuxTinyServer
+server/ShardServer
+
+# test files
+test_load_blobs.cpp
+test_ranker.cpp
+
+# crawl data (large binary files)
+data/crawled_page_*
+data/small/
+*.zip
+
+# dylibs
+*.dylib
+
+# compiled binaries from the old raw-g++ test workflow
+src/test_constraint_solver
+src/test_minimal
+src/test_real_data

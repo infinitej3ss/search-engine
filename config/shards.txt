@@ -1,0 +1,16 @@
+# shard configuration for distributed search
+# one host:port per line for each index shard
+# tuning parameters
+
+timeout_ms 5000
+shard_timeout_ms 4000
+results_needed 50
+good_threshold 0.6
+
+# shards — running locally for testing (one per rank blob)
+35.225.22.135:9000
+136.119.119.5:9000
+35.239.83.9:9000
+34.10.126.25:9000
+34.132.211.46:9000
+34.55.189.217:9000
