@@ -99,7 +99,14 @@ int main(int argc, char** argv) {
         auto t_start = std::chrono::steady_clock::now();
         auto t_last_print = t_start;
 
+        size_t file_idx = 0;
         for (auto filename : file_names[rank]) {
+            file_idx++;
+            u_int64_t file_pages = peek_num_pages(filename);
+            std::fprintf(stderr, "\n[file %zu/%zu] %s (~%llu pages)\n",
+                         file_idx, file_names[rank].size(), filename.c_str(),
+                         static_cast<unsigned long long>(file_pages));
+            std::fflush(stderr);
             if (load_page_file(filename) != 0) continue;
 
             u_int64_t file_num = get_page_file_num(filename);
@@ -113,30 +120,29 @@ int main(int argc, char** argv) {
                 idx.addDocument(page);
                 rank_docs++;
 
-                if ((rank_docs & 0x3FF) == 0) {  // cheap check every 1024 docs
-                    auto now = std::chrono::steady_clock::now();
-                    double since_print = std::chrono::duration<double>(now - t_last_print).count();
-                    if (since_print >= 2.0) {
-                        double elapsed = std::chrono::duration<double>(now - t_start).count();
-                        double rate = elapsed > 0 ? rank_docs / elapsed : 0;
-                        double pct = expected_docs > 0
-                                         ? 100.0 * rank_docs / static_cast<double>(expected_docs)
-                                         : 0.0;
-                        double eta = (expected_docs > 0 && rate > 0)
-                                         ? (expected_docs - rank_docs) / rate
-                                         : -1;
-                        std::fprintf(stderr,
-                                     "\rrank %zu: %d/%llu (%.1f%%) %.0f docs/s elapsed %s eta %s      ",
-                                     rank,
-                                     rank_docs,
-                                     static_cast<unsigned long long>(expected_docs),
-                                     pct,
-                                     rate,
-                                     format_hms(elapsed).c_str(),
-                                     format_hms(eta).c_str());
-                        std::fflush(stderr);
-                        t_last_print = now;
-                    }
+                // chrono::now is cheap: check every doc so true stalls surface
+                auto now = std::chrono::steady_clock::now();
+                double since_print = std::chrono::duration<double>(now - t_last_print).count();
+                if (since_print >= 2.0) {
+                    double elapsed = std::chrono::duration<double>(now - t_start).count();
+                    double rate = elapsed > 0 ? rank_docs / elapsed : 0;
+                    double pct = expected_docs > 0
+                                     ? 100.0 * rank_docs / static_cast<double>(expected_docs)
+                                     : 0.0;
+                    double eta = (expected_docs > 0 && rate > 0)
+                                     ? (expected_docs - rank_docs) / rate
+                                     : -1;
+                    std::fprintf(stderr,
+                                 "\rrank %zu: %d/%llu (%.1f%%) %.0f docs/s elapsed %s eta %s      ",
+                                 rank,
+                                 rank_docs,
+                                 static_cast<unsigned long long>(expected_docs),
+                                 pct,
+                                 rate,
+                                 format_hms(elapsed).c_str(),
+                                 format_hms(eta).c_str());
+                    std::fflush(stderr);
+                    t_last_print = now;
                 }
             }
             close_page_file();
