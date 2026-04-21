@@ -154,8 +154,14 @@ private:
         return decode_html_entities(out);
     }
 
+    static const WeightProfile& select_profile(
+        const std::vector<std::string>& terms) {
+        return terms.size() == 1 ? NAVIGATIONAL : GENERAL;
+    }
+
     static double compute_score(const std::vector<std::string>& terms,
                                  const DocCandidate& cand,
+                                 const WeightProfile& profile,
                                  double bm25_norm = 0.0) {
         RankerInput in;
         in.url = cand.url;
@@ -173,7 +179,7 @@ private:
         // zeroed out when they're genuinely relevant
         s = std::max(s, STATIC_FLOOR);
 
-        double d = score_dynamic(terms, cand, GENERAL, bm25_norm);
+        double d = score_dynamic(terms, cand, profile, bm25_norm);
 
         // power-weighted combination: static^α × dynamic^(1-α)
         // α < 0.5 means dynamic (relevance) dominates over static (quality).
@@ -296,7 +302,8 @@ public:
     std::vector<SearchResult> search_level(const query::QueryNode* ast,
                                             const std::vector<std::string>& terms,
                                             size_t level,
-                                            SearchStats* stats = nullptr) {
+                                            SearchStats* stats = nullptr,
+                                            const WeightProfile* profile = nullptr) {
         std::vector<SearchResult> results;
         if (level >= indexes.size() || !ast) return results;
 
@@ -351,9 +358,11 @@ public:
             median_bm25 = bm25_vals[bm25_vals.size() / 2];
         }
 
+        const WeightProfile& wp = profile ? *profile : select_profile(terms);
+
         for (auto& c : candidates) {
             double bm25_norm = 1.0 / (1.0 + std::exp(-SIGMOID_K * (c.bm25_raw - median_bm25)));
-            double s = compute_score(terms, c.cand, bm25_norm);
+            double s = compute_score(terms, c.cand, wp, bm25_norm);
             if (s <= 0.0) continue;
 
             RankerInput in;
@@ -364,7 +373,7 @@ public:
             in.word_count = 0;
             in.content_to_html_ratio = 0.0;
             double ss = StaticRanker(in).rank();
-            double ds = score_dynamic(terms, c.cand, GENERAL, bm25_norm);
+            double ds = score_dynamic(terms, c.cand, wp, bm25_norm);
 
             std::string title = join_title(c.meta.title_words);
             // snippet deferred to post-pagination (see SearchEngine::search)
@@ -512,7 +521,8 @@ public:
         struct Tagged { SearchResult result; size_t level; };
         std::vector<Tagged> tagged;
         for (size_t r = 0; r < indexes.size(); r++) {
-            auto level_results = search_level(compiled.ast.get(), terms, r, stats);
+            const auto& wp = select_profile(terms);
+            auto level_results = search_level(compiled.ast.get(), terms, r, stats, &wp);
             for (auto& res : level_results) tagged.push_back({std::move(res), r});
         }
         std::sort(tagged.begin(), tagged.end(),
