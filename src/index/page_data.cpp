@@ -451,6 +451,11 @@ int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64
     // start of the file (including the PageFileHeader). load_page_file has
     // already advanced CURRENT_PAGE_FILE_LOCATION past the header, so we set
     // it absolutely rather than add
+    if (index >= MAPPED_PAGE_FILE_SIZE) {
+        close_page_file();
+        pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
+        return -1;
+    }
     CURRENT_PAGE_FILE_LOCATION = (u_int8_t*)MAPPED_PAGE_FILE + index;
 
     // load data
