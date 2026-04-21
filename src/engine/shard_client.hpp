@@ -18,6 +18,7 @@
 #include <netdb.h>
 
 #include "search_result.hpp"
+#include "url_utils.hpp"
 
 struct ShardConfig {
     std::string host;
@@ -105,9 +106,19 @@ private:
         size_t pos = line.find(needle);
         if (pos == std::string::npos) return "";
         size_t start = pos + needle.size();
-        size_t end = line.find('"', start);
-        if (end == std::string::npos) return "";
-        return line.substr(start, end - start);
+        // walk the value honoring \" and \\ escapes
+        std::string out;
+        for (size_t i = start; i < line.size(); i++) {
+            if (line[i] == '\\' && i + 1 < line.size()) {
+                out += line[i + 1];
+                i++;
+            } else if (line[i] == '"') {
+                break;
+            } else {
+                out += line[i];
+            }
+        }
+        return out;
     }
 
     // parse a bracketed int array: "key":[1,2,3]
@@ -177,13 +188,7 @@ public:
         int fd = connect_to_shard(recv_timeout_ms);
         if (fd < 0) return 0;
 
-        // url-encode spaces as +
-        std::string encoded;
-        for (char c : query_str) {
-            encoded += (c == ' ' ? '+' : c);
-        }
-
-        std::string path = "query?q=" + encoded;
+        std::string path = "query?q=" + url_encode(query_str);
 
         if (!send_request(fd, path)) {
             close(fd);

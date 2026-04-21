@@ -18,7 +18,6 @@
 #include "../index/index.h"
 #include "../index/index_builder.h"
 #include "../index/page_data.h"
-#include "../index/constraint_solver.h"
 #include "../query/query_compiler.hpp"
 #include "../../config/weights.hpp"
 #include "../ranker/static/static_ranker.hpp"
@@ -272,18 +271,30 @@ private:
     }
 
 public:
-    // search a single rank/level. returns results sorted by combined score desc.
-    // bm25 stats (idf, avg doc length) are local to this level — there's no
-    // global corpus normalization across ranks, which is fine because the
-    // per-level pools are disjoint anyway.
-    std::vector<SearchResult> search_level(const std::vector<std::string>& terms,
+    // walk an ISR tree, collecting unique doc ids
+    static std::vector<int> walk_isr_docs(ISR* root) {
+        std::vector<int> doc_ids;
+        if (!root || !root->IsValid()) return doc_ids;
+        while (root->IsValid()) {
+            int d = root->GetCurrentDocId();
+            if (d < 0) break;
+            if (doc_ids.empty() || doc_ids.back() != d) doc_ids.push_back(d);
+            if (!root->SkipToDoc(d + 1)) break;
+        }
+        return doc_ids;
+    }
+
+    // search a single rank/level. compiles the AST into an ISR tree for
+    // this level's index. returns results sorted by combined score desc
+    std::vector<SearchResult> search_level(const query::QueryNode* ast,
+                                            const std::vector<std::string>& terms,
                                             size_t level,
                                             SearchStats* stats = nullptr) {
         std::vector<SearchResult> results;
-        if (level >= indexes.size()) return results;
+        if (level >= indexes.size() || !ast) return results;
 
-        ConstraintSolver solver(indexes[level].get());
-        auto doc_ids = solver.FindAndQuery(terms);
+        auto root = query::compile_to_isr(*ast, indexes[level].get());
+        auto doc_ids = walk_isr_docs(root.get());
 
         if (stats) stats->constraint_solved += static_cast<int>(doc_ids.size());
 
@@ -375,14 +386,9 @@ public:
     size_t num_levels() const { return indexes.size(); }
 
 private:
-    std::vector<SearchResult> search_distributed(const std::vector<std::string>& terms,
+    std::vector<SearchResult> search_distributed(const std::string& raw_query,
                                                   SearchStats* stats = nullptr) {
-        std::string query_str;
-        for (size_t i = 0; i < terms.size(); i++) {
-            if (i > 0) query_str += " ";
-            query_str += terms[i];
-        }
-        return distributor->search(query_str, stats);
+        return distributor->search(raw_query, stats);
     }
 
 public:
@@ -445,19 +451,23 @@ public:
                                       int offset = 0, int limit = 10,
                                       int* total_out = nullptr,
                                       SearchStats* stats = nullptr) {
-        auto terms = query::compile(raw_query);
-        if (stats) stats->parsed_tokens = terms;
+        auto compiled = query::compile(raw_query);
+        auto& terms = compiled.terms;
+        if (stats) {
+            stats->parsed_tokens = terms;
+            if (compiled.ast) stats->parsed_query_ast = compiled.ast->to_string();
+        }
 
-        if (terms.empty()) {
+        if (compiled.empty()) {
             if (total_out) *total_out = 0;
             return {};
         }
 
         load_and_apply_weights(weights_path);
 
-        // distributed path: shards generated their own snippets already
+        // distributed path: SNIPPETS TODO
         if (distributor) {
-            auto all = search_distributed(terms, stats);
+            auto all = search_distributed(raw_query, stats);
             if (total_out) *total_out = static_cast<int>(all.size());
             if (offset >= static_cast<int>(all.size())) return {};
             int end = std::min(offset + limit, static_cast<int>(all.size()));
@@ -471,7 +481,7 @@ public:
         struct Tagged { SearchResult result; size_t level; };
         std::vector<Tagged> tagged;
         for (size_t r = 0; r < indexes.size(); r++) {
-            auto level_results = search_level(terms, r, stats);
+            auto level_results = search_level(compiled.ast.get(), terms, r, stats);
             for (auto& res : level_results) tagged.push_back({std::move(res), r});
         }
         std::sort(tagged.begin(), tagged.end(),

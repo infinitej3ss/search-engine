@@ -14,7 +14,7 @@ std::vector<int> ConstraintSolver::FindAndQuery(const std::vector<std::string>& 
     // If ANY term doesn't exist in the index, the AND query returns nothing (can't have all the terms if one is missing)
     std::vector<ISR*> isrs;
     for (const auto& term : terms) {
-        ISR* isr = new ISR(index, term);
+        ISR* isr = new ISRWord(index, term);
         if (!isr->IsValid()) {
             // Term not found - AND query returns nothing
             for (ISR* i : isrs) delete i;
@@ -71,7 +71,7 @@ std::vector<int> ConstraintSolver::FindOrQuery(const std::vector<std::string>& t
     std::set<int> docSet;
 
     for (const auto& term : terms) {
-        ISR isr(index, term);
+        ISRWord isr(index, term);
         while (isr.IsValid()) {
             int docId = isr.GetCurrentDocId();
             if (docId < 0) break;

@@ -29,10 +29,7 @@ static std::string get_query_param(const std::string& path, const std::string& k
             std::string value = query.substr(value_start,
                 value_end == std::string::npos ? std::string::npos : value_end - value_start);
 
-            for (char& c : value) {
-                if (c == '+') c = ' ';
-            }
-            return value;
+            return url_decode(value);
         }
 
         pos = query.find('&', pos);

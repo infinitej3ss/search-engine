@@ -39,10 +39,7 @@ static std::string get_query_param(const std::string& path, const std::string& k
             std::string value = query.substr(value_start,
                 value_end == std::string::npos ? std::string::npos : value_end - value_start);
 
-            for (char& c : value) {
-                if (c == '+') c = ' ';
-            }
-            return value;
+            return url_decode(value);
         }
 
         pos = query.find('&', pos);
@@ -151,8 +148,9 @@ public:
                              "Connection: close\r\n\r\n";
         if (!write_all(talkFD, header)) return;
 
-        auto terms = query::compile(query_str);
-        if (terms.empty()) {
+        auto compiled = query::compile(query_str);
+        auto& terms = compiled.terms;
+        if (compiled.empty()) {
             std::cerr << "[shard] empty query after compile" << std::endl;
             return;
         }
@@ -162,13 +160,14 @@ public:
 
         SearchStats stats;
         stats.parsed_tokens = terms;
+        if (compiled.ast) stats.parsed_query_ast = compiled.ast->to_string();
         stats.per_rank_matched.assign(engine.num_levels(), 0);
 
         // iterate levels from highest quality (0) to lowest.
         // after each level, check whether we've hit the good-results threshold.
         // if the leader disconnected mid-stream, bail immediately
         for (size_t level = 0; level < engine.num_levels(); level++) {
-            auto level_results = engine.search_level(terms, level, &stats);
+            auto level_results = engine.search_level(compiled.ast.get(), terms, level, &stats);
 
             int level_sent = 0;
             for (const auto& r : level_results) {

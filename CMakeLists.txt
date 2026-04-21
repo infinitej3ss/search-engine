@@ -27,7 +27,6 @@ add_library(index_core STATIC
   src/index/index.cpp
   src/index/index_builder.cpp
   src/index/isr.cpp
-  src/index/constraint_solver.cpp
   src/index/Common.cpp
   src/index/page_data.cpp
 )
@@ -70,13 +69,13 @@ target_include_directories(shard_server PRIVATE
 target_link_libraries(shard_server PRIVATE index_core)
 
 # crawler
-add_executable(crawler src/crawler/crawler.cpp)
-target_link_libraries(crawler PRIVATE index_core OpenSSL::SSL)
-target_include_directories(crawler PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
-  ${CMAKE_SOURCE_DIR}/src/crawler
-  ${CMAKE_SOURCE_DIR}/src/ranker
-)
+# add_executable(crawler src/crawler/crawler.cpp)
+# target_link_libraries(crawler PRIVATE index_core OpenSSL::SSL)
+# target_include_directories(crawler PRIVATE
+#   ${CMAKE_SOURCE_DIR}/src
+#   ${CMAKE_SOURCE_DIR}/src/crawler
+#   ${CMAKE_SOURCE_DIR}/src/ranker
+# )
 
 # majestic million parser
 add_executable(majestic src/majestic_million_parser.cpp)

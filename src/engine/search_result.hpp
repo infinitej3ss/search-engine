@@ -26,6 +26,7 @@ struct SearchResult {
 // aggregates per-shard stats via merge()
 struct SearchStats {
     std::vector<std::string> parsed_tokens; // post-compile query terms
+    std::string parsed_query_ast; // s-expression of the parsed query
     int constraint_solved = 0; // total AND matches across ranks
     int passed_static_floor = 0; // candidates that survived the s>0 filter
     std::vector<int> per_rank_matched; // per_rank_matched[r] = survivors from rank r
@@ -36,6 +37,7 @@ struct SearchStats {
     // to the wider of the two
     void merge(const SearchStats& other) {
         if (parsed_tokens.empty()) parsed_tokens = other.parsed_tokens;
+        if (parsed_query_ast.empty()) parsed_query_ast = other.parsed_query_ast;
         constraint_solved += other.constraint_solved;
         passed_static_floor += other.passed_static_floor;
         if (per_rank_matched.size() < other.per_rank_matched.size()) {
