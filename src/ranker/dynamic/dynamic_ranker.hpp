@@ -25,6 +25,9 @@ struct DocCandidate {
   // per-query signals; populated by the search engine before scoring
   std::unordered_map<std::string, int> body_tf;
   std::unordered_map<std::string, std::vector<size_t>> body_positions;
+  // isr-derived body span (set when the isr tree reports span info)
+  SpanResult body_span;
+  bool has_body_span = false;
 };
 
 // lowercase a string for case-insensitive matching.
@@ -136,8 +139,22 @@ inline double span_score_for_field(
   return span_score_from_positions(build_positions(query, field));
 }
 
-// t2 — span / proximity. title is scanned locally; body uses index-derived
-// positions pre-populated on the candidate
+// score a SpanResult directly (used when the ISR tree provides span info)
+inline double span_score_from_result(const SpanResult& span) {
+  if (!span.all_terms_present) return 0.0;
+  double score = 0.3;
+  if (span.exact_phrase) score += 0.3;
+  if (span.in_order)     score += 0.25;
+  if (span.shortest_span > 0) {
+    score += 0.15 / static_cast<double>(span.shortest_span);
+  } else {
+    score += 0.15;
+  }
+  return score;
+}
+
+// t2 — span / proximity. title is scanned locally; body prefers
+// ISR-derived span when available, falls back to position-based
 inline double t2_span(
     const std::vector<std::string>& query,
     const DocCandidate& doc) {
@@ -145,18 +162,19 @@ inline double t2_span(
 
   double title_span = span_score_for_field(query, doc.title_words);
 
-  // translate doc.body_positions (keyed by term) into a parallel
-  // positions_per_term vector aligned with `query`
-  std::vector<std::vector<size_t>> body_pos(query.size());
-  for (size_t i = 0; i < query.size(); i++) {
-    auto it = doc.body_positions.find(query[i]);
-    if (it != doc.body_positions.end()) body_pos[i] = it->second;
+  double body_span_score;
+  if (doc.has_body_span) {
+    body_span_score = span_score_from_result(doc.body_span);
+  } else {
+    std::vector<std::vector<size_t>> body_pos(query.size());
+    for (size_t i = 0; i < query.size(); i++) {
+      auto it = doc.body_positions.find(query[i]);
+      if (it != doc.body_positions.end()) body_pos[i] = it->second;
+    }
+    body_span_score = span_score_from_positions(body_pos);
   }
-  double body_span = span_score_from_positions(body_pos);
 
-  // title proximity weighted higher — a tight span in the title is
-  // a stronger signal than in the body
-  return SPAN_TITLE_WEIGHT * title_span + (1.0 - SPAN_TITLE_WEIGHT) * body_span;
+  return SPAN_TITLE_WEIGHT * title_span + (1.0 - SPAN_TITLE_WEIGHT) * body_span_score;
 }
 
 // t3 — light global quality signal from hop distance.

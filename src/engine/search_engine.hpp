@@ -271,17 +271,24 @@ private:
     }
 
 public:
-    // walk an ISR tree, collecting unique doc ids
-    static std::vector<int> walk_isr_docs(ISR* root) {
-        std::vector<int> doc_ids;
-        if (!root || !root->IsValid()) return doc_ids;
+    struct DocMatch {
+        int doc_id;
+        SpanResult span;
+    };
+
+    // walk an ISR tree, collecting unique doc ids and their span info
+    static std::vector<DocMatch> walk_isr_docs(ISR* root) {
+        std::vector<DocMatch> matches;
+        if (!root || !root->IsValid()) return matches;
         while (root->IsValid()) {
             int d = root->GetCurrentDocId();
             if (d < 0) break;
-            if (doc_ids.empty() || doc_ids.back() != d) doc_ids.push_back(d);
+            if (matches.empty() || matches.back().doc_id != d) {
+                matches.push_back({d, root->GetMatchSpan()});
+            }
             if (!root->SkipToDoc(d + 1)) break;
         }
-        return doc_ids;
+        return matches;
     }
 
     // search a single rank/level. compiles the AST into an ISR tree for
@@ -294,9 +301,9 @@ public:
         if (level >= indexes.size() || !ast) return results;
 
         auto root = query::compile_to_isr(*ast, indexes[level].get());
-        auto doc_ids = walk_isr_docs(root.get());
+        auto matches = walk_isr_docs(root.get());
 
-        if (stats) stats->constraint_solved += static_cast<int>(doc_ids.size());
+        if (stats) stats->constraint_solved += static_cast<int>(matches.size());
 
         int n_docs = indexes[level]->GetDocumentCount();
         double avg_len = (level < avg_doc_lengths.size()) ? avg_doc_lengths[level] : 500.0;
@@ -316,20 +323,22 @@ public:
         };
         std::vector<Candidate> candidates;
 
-        for (int doc_id : doc_ids) {
-            auto meta = indexes[level]->GetDocumentMetadata(doc_id);
+        for (const auto& m : matches) {
+            auto meta = indexes[level]->GetDocumentMetadata(m.doc_id);
             DocCandidate cand = to_candidate(meta);
 
-            // per-query signals for T1 (body_tf), T2 (body_positions), and BM25
+            // isr-derived body span
+            cand.body_span = m.span;
+            cand.has_body_span = true;
+
+            // per-query signals for T1 (body_tf) and BM25
             for (const auto& term : terms) {
                 cand.body_tf[term] =
-                    indexes[level]->GetFieldTermFrequency(doc_id, term, 'b');
-                cand.body_positions[term] =
-                    indexes[level]->GetFieldPositions(doc_id, term, 'b');
+                    indexes[level]->GetFieldTermFrequency(m.doc_id, term, 'b');
             }
             double bm25_raw = bm25.score(cand.body_length, cand.body_tf, terms, doc_freq);
 
-            candidates.push_back({doc_id, std::move(meta), std::move(cand), bm25_raw});
+            candidates.push_back({m.doc_id, std::move(meta), std::move(cand), bm25_raw});
         }
 
         // sigmoid normalization centered on median

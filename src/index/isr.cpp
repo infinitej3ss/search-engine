@@ -30,6 +30,11 @@ int ISR::GetCurrentDocId() const {
   return -1;
 }
 
+SpanResult ISR::GetMatchSpan() const {
+  if (!IsValid()) return {};
+  return {true, 0, true, true};
+}
+
 bool ISR::SkipToDoc(int targetDocId) {
   if (targetDocId < 0 || targetDocId >= index->GetDocumentCount()) return false;
 
@@ -427,4 +432,51 @@ bool ISRContainer::Next() {
 bool ISRContainer::Seek(int location) {
   if (!docs.SkipToDocContaining(location)) { valid = false; return false; }
   return findNext(docs.GetCurrentDocIndex());
+}
+
+// GetMatchSpan overrides
+
+SpanResult ISRAnd::GetMatchSpan() const {
+  if (!valid || children.empty()) return {};
+  size_t n = children.size();
+  size_t span = static_cast<size_t>(currentEnd - currentStart);
+
+  // check if children's first hits are in query order
+  bool ordered = true;
+  for (size_t i = 1; i < n; i++) {
+    if (children[i]->GetStartLocation() < children[i - 1]->GetStartLocation()) {
+      ordered = false;
+      break;
+    }
+  }
+
+  bool exact = (span == n - 1) && ordered;
+  return {true, span, ordered, exact};
+}
+
+SpanResult ISRPhrase::GetMatchSpan() const {
+  if (!valid || children.empty()) return {};
+  return {true, children.size() - 1, true, true};
+}
+
+SpanResult ISROr::GetMatchSpan() const {
+  if (!valid || currentChild < 0) return {};
+  return children[currentChild]->GetMatchSpan();
+}
+
+SpanResult ISRContainer::GetMatchSpan() const {
+  if (!valid || contained.empty()) return {};
+  size_t n = contained.size();
+  size_t span = static_cast<size_t>(currentEnd - currentStart);
+
+  bool ordered = true;
+  for (size_t i = 1; i < n; i++) {
+    if (contained[i]->GetStartLocation() < contained[i - 1]->GetStartLocation()) {
+      ordered = false;
+      break;
+    }
+  }
+
+  bool exact = (span == n - 1) && ordered;
+  return {true, span, ordered, exact};
 }

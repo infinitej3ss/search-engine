@@ -5,14 +5,7 @@
 #include <limits>
 #include <algorithm>
 
-// TODO move to .cpp if this grows past header-only comfort
-
-struct SpanResult {
-  bool all_terms_present;
-  size_t shortest_span;
-  bool in_order;
-  bool exact_phrase;
-};
+#include "span_result.hpp"
 
 // finds the tightest window covering every query term, checks term order,
 // and flags exact phrases. positions[i] = sorted positions of the i-th query

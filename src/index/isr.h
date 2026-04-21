@@ -2,6 +2,7 @@
 #pragma once
 
 #include "index.h"
+#include "../ranker/dynamic/span_result.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -38,6 +39,10 @@ class ISR {
   // reports a real decoration; ISRPhrase uses this to require all children
   // share the same field (body / title / url / anchor)
   virtual char GetCurrentDecoration() const { return 0; }
+
+  // span info for the current match — used by the ranker's T2 scorer.
+  // base returns a trivial single-term result; composites override
+  virtual SpanResult GetMatchSpan() const;
 
   // default helpers implemented on top of the virtual interface. use the
   // doc-range table to map the current match to a doc id, and seek to the
@@ -130,6 +135,7 @@ class ISRAnd : public ISR {
   int GetEndLocation() const override { return currentEnd; }
   bool IsValid() const override { return valid; }
   int GetCurrentDocId() const override { return currentDoc; }
+  SpanResult GetMatchSpan() const override;
 };
 
 // phrase: children must appear at consecutive positions, all in the same
@@ -158,6 +164,7 @@ class ISRPhrase : public ISR {
   int GetEndLocation() const override { return currentEnd; }
   bool IsValid() const override { return valid; }
   char GetCurrentDecoration() const override { return currentDecoration; }
+  SpanResult GetMatchSpan() const override;
 };
 
 // disjunction: emits the child match with the smallest start. next
@@ -183,6 +190,7 @@ class ISROr : public ISR {
   int GetStartLocation() const override { return currentStart; }
   int GetEndLocation() const override { return currentEnd; }
   bool IsValid() const override { return valid; }
+  SpanResult GetMatchSpan() const override;
 };
 
 // container: emits one match per doc that contains every "contained"
@@ -221,4 +229,5 @@ class ISRContainer : public ISR {
   int GetEndLocation() const override { return currentEnd; }
   bool IsValid() const override { return valid; }
   int GetCurrentDocId() const override { return currentDoc; }
+  SpanResult GetMatchSpan() const override;
 };
