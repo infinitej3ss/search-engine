@@ -154,4 +154,9 @@ u_int64_t get_page_file_num(const std::string& file_name);
 //      0 on success, -1 on failure
 int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64_t rank, const u_int64_t num, const u_int64_t index);
 
+// scans all pages in the given file for one matching target_url.
+// slower than get_page_data_from_index but works when the byte offset
+// is wrong (e.g. index built with stale page_file_num)
+int scan_page_file_for_url(PageData& pd, const std::string& file_path, const std::string& target_url);
+
 u_int64_t rank_bucket_from_double(const double score);

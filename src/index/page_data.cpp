@@ -472,6 +472,26 @@ int get_page_data_from_index(PageData& pd, const std::string& dir, const u_int64
     return 0;
 }
 
+int scan_page_file_for_url(PageData& pd, const std::string& file_path, const std::string& target_url) {
+    pthread_mutex_lock(&PAGE_FILE_INDEXING_MUTEX);
+    if (load_page_file(file_path) == -1) {
+        pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
+        return -1;
+    }
+    PageData candidate;
+    while (get_next_page(candidate) != -1) {
+        if (candidate.url == target_url) {
+            pd = std::move(candidate);
+            close_page_file();
+            pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
+            return 0;
+        }
+    }
+    close_page_file();
+    pthread_mutex_unlock(&PAGE_FILE_INDEXING_MUTEX);
+    return -1;
+}
+
 u_int64_t rank_bucket_from_double(const double score) {
     if(score > 1) {
         return 0;

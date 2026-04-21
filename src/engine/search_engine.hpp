@@ -70,10 +70,7 @@ public:
                 + std::to_string(num);
             if (!std::filesystem::exists(path)) break;
             pd = PageData{};
-            if (get_page_data_from_index(pd, data_dir,
-                                         meta.page_file_rank, num,
-                                         meta.page_file_index) == 0
-                && pd.url == meta.url) {
+            if (scan_page_file_for_url(pd, path, meta.url) == 0) {
                 return true;
             }
         }
