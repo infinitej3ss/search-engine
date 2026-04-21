@@ -13,15 +13,17 @@ blacklist               1.0
 
 # dynamic weight profiles
 # (metastream = T1 field matches, span = T2 proximity, quality = T3 hop, bm25 = T4)
-profile.general.metastream      0.25
-profile.general.span            0.30
+profile.general.metastream      0.15
+profile.general.span            0.25
 profile.general.quality         0.08
-profile.general.bm25            0.37
+profile.general.bm25            0.32
+profile.general.title_coverage  0.20
 
-profile.navigational.metastream 0.45
+profile.navigational.metastream 0.40
 profile.navigational.span       0.10
 profile.navigational.quality    0.15
-profile.navigational.bm25       0.30
+profile.navigational.bm25       0.25
+profile.navigational.title_coverage 0.10
 
 # combination
 # static^α × dynamic^(1-α). <0.5 favors relevance, >0.5 favors quality
@@ -32,7 +34,7 @@ static_floor                    0.15
 # per lecture: anchor > url > title > body (anchor omitted, no data)
 field.url                       1.0
 field.title                     0.8
-field.body                      0.3
+field.body                      0.15
 
 # t2 span
 # title/body blend (body weight = 1 - title weight)

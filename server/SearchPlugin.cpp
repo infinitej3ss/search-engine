@@ -107,6 +107,7 @@ static std::string results_to_json(const std::string& query,
              << ",\"t2\":" << r.t2
              << ",\"t3\":" << r.t3
              << ",\"bm25\":" << r.bm25
+             << ",\"t5\":" << r.t5
              << "}";
     }
 

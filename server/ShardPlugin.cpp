@@ -78,6 +78,7 @@ static std::string result_to_line(const SearchResult& r) {
          << ",\"t2\":" << r.t2
          << ",\"t3\":" << r.t3
          << ",\"bm25\":" << r.bm25
+         << ",\"t5\":" << r.t5
          << "}\n";
     return json.str();
 }

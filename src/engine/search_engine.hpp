@@ -383,6 +383,7 @@ public:
             sr.t2 = t2_span(terms, c.cand);
             sr.t3 = t3_quality(c.cand);
             sr.bm25 = bm25_norm;
+            sr.t5 = t5_title_coverage(terms, c.cand);
             results.push_back(std::move(sr));
 
             if (stats) {

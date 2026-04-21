@@ -223,7 +223,22 @@ inline double content_quality_penalty(const DocCandidate& doc) {
   return penalty;
 }
 
-// top-level dynamic score = w1·T1 + w2·T2 + w3·T3 + w4·T4
+// fraction of query terms that appear in the document title
+inline double t5_title_coverage(
+    const std::vector<std::string>& query,
+    const DocCandidate& doc) {
+  if (query.empty()) return 0.0;
+
+  int found = 0;
+  for (const auto& term : query) {
+    for (const auto& w : doc.title_words) {
+      if (to_lower(w) == term) { ++found; break; }
+    }
+  }
+  return static_cast<double>(found) / static_cast<double>(query.size());
+}
+
+// top-level dynamic score = w1·T1 + w2·T2 + w3·T3 + w4·T4 + w5·T5
 // bm25_score is precomputed by the caller (needs index-level stats)
 // and passed in. normalized to [0,1] by the caller.
 // content quality penalty is applied as a multiplier.
@@ -235,11 +250,13 @@ inline double score_dynamic(
   double t1 = t1_metastream(query, doc);
   double t2 = t2_span(query, doc);
   double t3 = t3_quality(doc);
+  double t5 = t5_title_coverage(query, doc);
 
   double raw = profile.w_metastream * t1
              + profile.w_span       * t2
              + profile.w_quality    * t3
-             + profile.w_bm25      * bm25_score;
+             + profile.w_bm25      * bm25_score
+             + profile.w_title_coverage * t5;
 
   return raw * content_quality_penalty(doc);
 }

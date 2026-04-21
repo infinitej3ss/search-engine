@@ -160,6 +160,7 @@ private:
         result.t2             = extract_double(line, "t2");
         result.t3             = extract_double(line, "t3");
         result.bm25           = extract_double(line, "bm25");
+        result.t5             = extract_double(line, "t5");
         return true;
     }
 
