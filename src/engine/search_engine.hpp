@@ -51,6 +51,36 @@ private:
         return p + "/";
     }
 
+public:
+    // try loading page data, falling back to other _num_ files if the stored
+    // page_file_num points to the wrong page (index built with buggy parser)
+    bool load_page_data(PageData& pd,
+                        const Index::DocumentMetadata& meta) const {
+        if (get_page_data_from_index(pd, data_dir,
+                                     meta.page_file_rank,
+                                     meta.page_file_num,
+                                     meta.page_file_index) == 0
+            && pd.url == meta.url) {
+            return true;
+        }
+        for (u_int64_t num = 0; num < 200; num++) {
+            if (num == meta.page_file_num) continue;
+            std::string path = data_dir + "crawled_page_data_rank_"
+                + std::to_string(meta.page_file_rank) + "_num_"
+                + std::to_string(num);
+            if (!std::filesystem::exists(path)) break;
+            pd = PageData{};
+            if (get_page_data_from_index(pd, data_dir,
+                                         meta.page_file_rank, num,
+                                         meta.page_file_index) == 0
+                && pd.url == meta.url) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+private:
     // build a snippet by fetching the raw page from its crawler file and
     // centering a window around the first query-term hit. called per result
     // on the paginated page only, not per candidate
@@ -59,12 +89,7 @@ private:
         if (terms.empty() || data_dir.empty()) return "";
 
         PageData pd;
-        if (get_page_data_from_index(pd, data_dir,
-                                     meta.page_file_rank,
-                                     meta.page_file_num,
-                                     meta.page_file_index) != 0) {
-            return "";
-        }
+        if (!load_page_data(pd, meta)) return "";
         if (pd.words.empty()) return "";
 
         constexpr int WINDOW = 20;
