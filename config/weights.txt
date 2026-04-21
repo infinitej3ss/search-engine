@@ -13,11 +13,11 @@ blacklist               1.0
 
 # dynamic weight profiles
 # (metastream = T1 field matches, span = T2 proximity, quality = T3 hop, bm25 = T4)
-profile.general.metastream      0.15
+profile.general.metastream      0.10
 profile.general.span            0.25
-profile.general.quality         0.08
-profile.general.bm25            0.37
-profile.general.title_coverage  0.15
+profile.general.quality         0.05
+profile.general.bm25            0.35
+profile.general.title_coverage  0.25
 profile.general.max_per_host    2
 
 profile.navigational.metastream 0.40
@@ -29,7 +29,7 @@ profile.navigational.max_per_host 0
 
 # combination
 # static^α × dynamic^(1-α). <0.5 favors relevance, >0.5 favors quality
-combine_alpha                   0.4
+combine_alpha                   0.35
 static_floor                    0.15
 
 # t1 metastream field weights
@@ -40,10 +40,10 @@ field.body                      0.15
 
 # t2 span
 # title/body blend (body weight = 1 - title weight)
-span.title_weight               0.7
+span.title_weight               0.8
 
 # bm25 sigmoid normalization
-sigmoid_k                       0.1
+sigmoid_k                       0.3
 
 # content quality penalties
 penalty.title_max_repeat        3
