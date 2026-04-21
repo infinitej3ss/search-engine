@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <vector>
 
-#include "constraint_solver.h"
 #include "index.h"
 #include "index_builder.h"
 #include "isr.h"
@@ -51,15 +51,15 @@ TEST_CASE("first word of later doc is attributed to the correct doc", "[isr][bou
     b.addDocument(make_page("https://ex.com/c", {"t"}, {"epsilon"}));
   });
 
-  ISR gamma(built.idx.get(), "gamma");
+  ISRWord gamma(built.idx.get(), "gamma");
   REQUIRE(gamma.IsValid());
   REQUIRE(gamma.GetCurrentDocId() == 1);
 
-  ISR epsilon(built.idx.get(), "epsilon");
+  ISRWord epsilon(built.idx.get(), "epsilon");
   REQUIRE(epsilon.IsValid());
   REQUIRE(epsilon.GetCurrentDocId() == 2);
 
-  ISR alpha(built.idx.get(), "alpha");
+  ISRWord alpha(built.idx.get(), "alpha");
   REQUIRE(alpha.IsValid());
   REQUIRE(alpha.GetCurrentDocId() == 0);
 }
@@ -71,7 +71,7 @@ TEST_CASE("repeated-term ISR visits each doc exactly once", "[isr][boundaries]")
     b.addDocument(make_page("https://ex.com/c", {"t"}, {"common", "c"}));
   });
 
-  ISR isr(built.idx.get(), "common");
+  ISRWord isr(built.idx.get(), "common");
   std::vector<int> visited;
   while (isr.IsValid()) {
     int d = isr.GetCurrentDocId();
@@ -82,15 +82,25 @@ TEST_CASE("repeated-term ISR visits each doc exactly once", "[isr][boundaries]")
   REQUIRE(visited == std::vector<int>{0, 1, 2});
 }
 
-TEST_CASE("AND query across adjacent docs resolves cleanly", "[constraint_solver][boundaries]") {
+TEST_CASE("AND query across adjacent docs resolves cleanly", "[isr][boundaries]") {
   auto built = build_and_mmap([](IndexBuilder& b) {
     b.addDocument(make_page("https://ex.com/a", {"t"}, {"x", "y"}));
     b.addDocument(make_page("https://ex.com/b", {"t"}, {"x", "y"}));
     b.addDocument(make_page("https://ex.com/c", {"t"}, {"z"}));
   });
 
-  ConstraintSolver solver(built.idx.get());
-  auto result = solver.FindAndQuery({"x", "y"});
+  std::vector<std::unique_ptr<ISR>> kids;
+  kids.push_back(std::make_unique<ISRWord>(built.idx.get(), "x"));
+  kids.push_back(std::make_unique<ISRWord>(built.idx.get(), "y"));
+  ISRAnd andIsr(built.idx.get(), std::move(kids));
+
+  std::vector<int> result;
+  while (andIsr.IsValid()) {
+    int d = andIsr.GetCurrentDocId();
+    if (d < 0) break;
+    result.push_back(d);
+    if (!andIsr.Next()) break;
+  }
   std::sort(result.begin(), result.end());
   REQUIRE(result == std::vector<int>{0, 1});
 }
@@ -104,7 +114,7 @@ TEST_CASE("SkipToDoc lands precisely on the requested doc", "[isr][boundaries]")
   });
 
   for (int target = 0; target < 5; target++) {
-    ISR isr(built.idx.get(), "common");
+    ISRWord isr(built.idx.get(), "common");
     REQUIRE(isr.SkipToDoc(target));
     REQUIRE(isr.GetCurrentDocId() == target);
   }

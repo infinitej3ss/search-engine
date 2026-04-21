@@ -39,10 +39,7 @@ static std::string get_query_param(const std::string& path, const std::string& k
             std::string value = query.substr(value_start,
                 value_end == std::string::npos ? std::string::npos : value_end - value_start);
 
-            for (char& c : value) {
-                if (c == '+') c = ' ';
-            }
-            return value;
+            return url_decode(value);
         }
 
         pos = query.find('&', pos);
@@ -132,7 +129,8 @@ public:
     }
 
     bool MagicPath(const std::string path) override {
-        return path == "/query" || path.find("/query?") == 0;
+        return path == "/query" || path.find("/query?") == 0
+            || path == "/snippet" || path.find("/snippet?") == 0;
     }
 
     bool StreamingResponse(const std::string path) override {
@@ -143,7 +141,51 @@ public:
         return "";
     }
 
+    // parse comma-separated doc_ids param
+    static std::vector<int> parse_doc_ids(const std::string& raw) {
+        std::vector<int> out;
+        size_t i = 0;
+        while (i < raw.size()) {
+            size_t comma = raw.find(',', i);
+            std::string tok = raw.substr(i, comma == std::string::npos
+                                                ? std::string::npos : comma - i);
+            if (!tok.empty()) {
+                try { out.push_back(std::stoi(tok)); } catch (...) {}
+            }
+            if (comma == std::string::npos) break;
+            i = comma + 1;
+        }
+        return out;
+    }
+
+    void ProcessSnippetRequest(const std::string& request, int talkFD) {
+        std::string query_str = get_query_param(request, "q");
+        std::string doc_ids_raw = get_query_param(request, "doc_ids");
+        auto doc_ids = parse_doc_ids(doc_ids_raw);
+
+        std::string header = "HTTP/1.1 200 OK\r\n"
+                             "Content-Type: application/x-ndjson\r\n"
+                             "Connection: close\r\n\r\n";
+        if (!write_all(talkFD, header)) return;
+
+        auto compiled = query::compile(query_str);
+        if (compiled.empty()) return;
+
+        for (int doc_id : doc_ids) {
+            auto snippet = engine.fetch_snippet_by_id(doc_id, compiled.terms);
+            std::ostringstream json;
+            json << "{\"doc_id\":" << doc_id
+                 << ",\"snippet\":\"" << json_escape(snippet) << "\"}\n";
+            if (!write_all(talkFD, json.str())) return;
+        }
+    }
+
     void ProcessStreamingRequest(std::string request, int talkFD) override {
+        if (request.find("/snippet") != std::string::npos) {
+            ProcessSnippetRequest(request, talkFD);
+            return;
+        }
+
         std::string query_str = get_query_param(request, "q");
 
         std::string header = "HTTP/1.1 200 OK\r\n"
@@ -151,8 +193,9 @@ public:
                              "Connection: close\r\n\r\n";
         if (!write_all(talkFD, header)) return;
 
-        auto terms = query::compile(query_str);
-        if (terms.empty()) {
+        auto compiled = query::compile(query_str);
+        auto& terms = compiled.terms;
+        if (compiled.empty()) {
             std::cerr << "[shard] empty query after compile" << std::endl;
             return;
         }
@@ -162,13 +205,14 @@ public:
 
         SearchStats stats;
         stats.parsed_tokens = terms;
+        if (compiled.ast) stats.parsed_query_ast = compiled.ast->to_string();
         stats.per_rank_matched.assign(engine.num_levels(), 0);
 
         // iterate levels from highest quality (0) to lowest.
         // after each level, check whether we've hit the good-results threshold.
         // if the leader disconnected mid-stream, bail immediately
         for (size_t level = 0; level < engine.num_levels(); level++) {
-            auto level_results = engine.search_level(terms, level, &stats);
+            auto level_results = engine.search_level(compiled.ast.get(), terms, level, &stats);
 
             int level_sent = 0;
             for (const auto& r : level_results) {

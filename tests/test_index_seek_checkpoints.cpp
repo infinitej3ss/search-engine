@@ -69,7 +69,7 @@ TEST_CASE("checkpoints don't break Seek correctness", "[isr][checkpoints]") {
   });
 
   const int target_doc = (CHECKPOINT_STRIDE * 3) / 2;
-  ISR isr(built.idx.get(), "foo");
+  ISRWord isr(built.idx.get(), "foo");
   REQUIRE(isr.SkipToDoc(target_doc));
   REQUIRE(isr.GetCurrentDocId() == target_doc);
 
@@ -88,7 +88,7 @@ TEST_CASE("Seek to various positions returns correct doc", "[isr][checkpoints]")
   for (int target : {0, CHECKPOINT_STRIDE - 1, CHECKPOINT_STRIDE,
                      CHECKPOINT_STRIDE * 2, CHECKPOINT_STRIDE * 3 + 5,
                      N - 1}) {
-    ISR isr(built.idx.get(), "foo");
+    ISRWord isr(built.idx.get(), "foo");
     REQUIRE(isr.SkipToDoc(target));
     REQUIRE(isr.GetCurrentDocId() == target);
   }
@@ -108,7 +108,7 @@ TEST_CASE("checkpoints survive blob round-trip", "[index][checkpoints][blob]") {
   REQUIRE(v.is_valid);
   REQUIRE(v.seek_absolutes.size() >= 2);
 
-  ISR isr(built.idx.get(), "foo");
+  ISRWord isr(built.idx.get(), "foo");
   REQUIRE(isr.SkipToDoc(N / 2));
   REQUIRE(isr.GetCurrentDocId() == N / 2);
 }

@@ -1,9 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
 
-#include "constraint_solver.h"
+#include "isr.h"
 #include "index.h"
 #include "index_builder.h"
 #include "page_data.h"
@@ -85,7 +86,7 @@ TEST_CASE("mixed-case tokens survive blob round-trip", "[index][case_folding][bl
   REQUIRE(built.idx->GetDocumentFrequency("Python") == 0);
 }
 
-TEST_CASE("AND query on mixed-case title returns matching doc", "[constraint_solver][case_folding]") {
+TEST_CASE("AND query on mixed-case title returns matching doc", "[isr][case_folding]") {
   auto built = build_and_mmap([](IndexBuilder& b) {
     b.addDocument(make_page("https://py.example/tutorial",
                             {"The", "Python", "Tutorial"},
@@ -94,10 +95,20 @@ TEST_CASE("AND query on mixed-case title returns matching doc", "[constraint_sol
                             {"The", "C++", "Tutorial"},
                             {"an", "intro"}));
   });
-  ConstraintSolver solver(built.idx.get());
 
-  REQUIRE(solver.FindAndQuery({"python", "tutorial"}) == std::vector<int>{0});
-  REQUIRE(solver.FindOrQuery({"python"}) == std::vector<int>{0});
+  std::vector<std::unique_ptr<ISR>> kids;
+  kids.push_back(std::make_unique<ISRWord>(built.idx.get(), "python"));
+  kids.push_back(std::make_unique<ISRWord>(built.idx.get(), "tutorial"));
+  ISRAnd andIsr(built.idx.get(), std::move(kids));
+
+  std::vector<int> docs;
+  while (andIsr.IsValid()) {
+    int d = andIsr.GetCurrentDocId();
+    if (d < 0) break;
+    docs.push_back(d);
+    if (!andIsr.Next()) break;
+  }
+  REQUIRE(docs == std::vector<int>{0});
 }
 
 TEST_CASE("url parts (already lowercased) are unaffected", "[index][case_folding]") {

@@ -36,6 +36,7 @@ private:
     // streams results into the shared accumulator, honoring the stop flag.
     // also merges the shard's trailing stats line into the shared SearchStats
     static void worker(ShardClient* client,
+                       int shard_idx,
                        const std::string& query,
                        int shard_timeout_ms,
                        double threshold,
@@ -50,7 +51,9 @@ private:
 
             {
                 std::lock_guard<std::mutex> lock(*mtx);
-                out->push_back(r);
+                SearchResult tagged = r;
+                tagged.shard_idx = shard_idx;
+                out->push_back(std::move(tagged));
             }
 
             if (r.combined_score >= threshold) {
@@ -138,9 +141,9 @@ public:
         // launch one worker per shard
         std::vector<std::thread> threads;
         threads.reserve(shards.size());
-        for (auto& shard : shards) {
+        for (size_t i = 0; i < shards.size(); i++) {
             threads.emplace_back(worker,
-                &shard, std::cref(query_str),
+                &shards[i], static_cast<int>(i), std::cref(query_str),
                 shard_timeout_ms, good_threshold,
                 &all_results, &mtx, &good_count, &stop_flag,
                 stats, &alive_workers);
@@ -189,5 +192,34 @@ public:
             deduped.resize(results_needed);
         }
         return deduped;
+    }
+
+    // phase-2: fetch snippets for a page of results. groups by origin shard,
+    // fires one /snippet request per shard, stitches results back by doc_id.
+    // modifies the results in place
+    void fetch_page_snippets(const std::string& raw_query,
+                              std::vector<SearchResult>& page) {
+        // group doc_ids by shard
+        std::unordered_map<int, std::vector<int>> shard_docs;
+        for (const auto& r : page) {
+            if (r.shard_idx >= 0) shard_docs[r.shard_idx].push_back(r.doc_id);
+        }
+
+        // fetch per-shard (sequential for simplicity; could thread later)
+        std::unordered_map<int, std::unordered_map<int, std::string>> shard_snippets;
+        for (auto& [idx, doc_ids] : shard_docs) {
+            if (idx < 0 || idx >= static_cast<int>(shards.size())) continue;
+            shard_snippets[idx] = shards[idx].fetch_snippets(
+                raw_query, doc_ids, shard_timeout_ms);
+        }
+
+        // stitch back
+        for (auto& r : page) {
+            if (r.shard_idx < 0) continue;
+            auto sit = shard_snippets.find(r.shard_idx);
+            if (sit == shard_snippets.end()) continue;
+            auto dit = sit->second.find(r.doc_id);
+            if (dit != sit->second.end()) r.snippet = std::move(dit->second);
+        }
     }
 };

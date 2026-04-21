@@ -29,10 +29,7 @@ static std::string get_query_param(const std::string& path, const std::string& k
             std::string value = query.substr(value_start,
                 value_end == std::string::npos ? std::string::npos : value_end - value_start);
 
-            for (char& c : value) {
-                if (c == '+') c = ' ';
-            }
-            return value;
+            return url_decode(value);
         }
 
         pos = query.find('&', pos);
@@ -84,6 +81,8 @@ static std::string results_to_json(const std::string& query,
         json << "\"" << json_escape(stats.parsed_tokens[i]) << "\"";
     }
     json << "],";
+    json << "\"parsed_query_ast\":\""
+         << json_escape(stats.parsed_query_ast) << "\",";
     json << "\"constraint_solved\":" << stats.constraint_solved << ",";
     json << "\"passed_static_floor\":" << stats.passed_static_floor << ",";
     json << "\"per_rank_matched\":[";

@@ -18,7 +18,6 @@
 #include "../index/index.h"
 #include "../index/index_builder.h"
 #include "../index/page_data.h"
-#include "../index/constraint_solver.h"
 #include "../query/query_compiler.hpp"
 #include "../../config/weights.hpp"
 #include "../ranker/static/static_ranker.hpp"
@@ -272,20 +271,39 @@ private:
     }
 
 public:
-    // search a single rank/level. returns results sorted by combined score desc.
-    // bm25 stats (idf, avg doc length) are local to this level — there's no
-    // global corpus normalization across ranks, which is fine because the
-    // per-level pools are disjoint anyway.
-    std::vector<SearchResult> search_level(const std::vector<std::string>& terms,
+    struct DocMatch {
+        int doc_id;
+        SpanResult span;
+    };
+
+    // walk an ISR tree, collecting unique doc ids and their span info
+    static std::vector<DocMatch> walk_isr_docs(ISR* root) {
+        std::vector<DocMatch> matches;
+        if (!root || !root->IsValid()) return matches;
+        while (root->IsValid()) {
+            int d = root->GetCurrentDocId();
+            if (d < 0) break;
+            if (matches.empty() || matches.back().doc_id != d) {
+                matches.push_back({d, root->GetMatchSpan()});
+            }
+            if (!root->SkipToDoc(d + 1)) break;
+        }
+        return matches;
+    }
+
+    // search a single rank/level. compiles the AST into an ISR tree for
+    // this level's index. returns results sorted by combined score desc
+    std::vector<SearchResult> search_level(const query::QueryNode* ast,
+                                            const std::vector<std::string>& terms,
                                             size_t level,
                                             SearchStats* stats = nullptr) {
         std::vector<SearchResult> results;
-        if (level >= indexes.size()) return results;
+        if (level >= indexes.size() || !ast) return results;
 
-        ConstraintSolver solver(indexes[level].get());
-        auto doc_ids = solver.FindAndQuery(terms);
+        auto root = query::compile_to_isr(*ast, indexes[level].get());
+        auto matches = walk_isr_docs(root.get());
 
-        if (stats) stats->constraint_solved += static_cast<int>(doc_ids.size());
+        if (stats) stats->constraint_solved += static_cast<int>(matches.size());
 
         int n_docs = indexes[level]->GetDocumentCount();
         double avg_len = (level < avg_doc_lengths.size()) ? avg_doc_lengths[level] : 500.0;
@@ -305,20 +323,22 @@ public:
         };
         std::vector<Candidate> candidates;
 
-        for (int doc_id : doc_ids) {
-            auto meta = indexes[level]->GetDocumentMetadata(doc_id);
+        for (const auto& m : matches) {
+            auto meta = indexes[level]->GetDocumentMetadata(m.doc_id);
             DocCandidate cand = to_candidate(meta);
 
-            // per-query signals for T1 (body_tf), T2 (body_positions), and BM25
+            // isr-derived body span
+            cand.body_span = m.span;
+            cand.has_body_span = true;
+
+            // per-query signals for T1 (body_tf) and BM25
             for (const auto& term : terms) {
                 cand.body_tf[term] =
-                    indexes[level]->GetFieldTermFrequency(doc_id, term, 'b');
-                cand.body_positions[term] =
-                    indexes[level]->GetFieldPositions(doc_id, term, 'b');
+                    indexes[level]->GetFieldTermFrequency(m.doc_id, term, 'b');
             }
             double bm25_raw = bm25.score(cand.body_length, cand.body_tf, terms, doc_freq);
 
-            candidates.push_back({doc_id, std::move(meta), std::move(cand), bm25_raw});
+            candidates.push_back({m.doc_id, std::move(meta), std::move(cand), bm25_raw});
         }
 
         // sigmoid normalization centered on median
@@ -374,15 +394,25 @@ public:
 
     size_t num_levels() const { return indexes.size(); }
 
-private:
-    std::vector<SearchResult> search_distributed(const std::vector<std::string>& terms,
-                                                  SearchStats* stats = nullptr) {
-        std::string query_str;
-        for (size_t i = 0; i < terms.size(); i++) {
-            if (i > 0) query_str += " ";
-            query_str += terms[i];
+    // fetch a snippet for a single doc_id (phase-2 distributed snippets).
+    // searches all levels for the doc_id since the caller may not know the
+    // rank. returns empty string if the doc can't be found or has no page data
+    std::string fetch_snippet_by_id(int doc_id,
+                                     const std::vector<std::string>& terms) const {
+        for (const auto& idx : indexes) {
+            if (doc_id < 0 || doc_id >= idx->GetDocumentCount()) continue;
+            auto meta = idx->GetDocumentMetadata(doc_id);
+            if (meta.url.empty()) continue;
+            auto s = fetch_snippet(terms, meta);
+            if (!s.empty()) return s;
         }
-        return distributor->search(query_str, stats);
+        return "";
+    }
+
+private:
+    std::vector<SearchResult> search_distributed(const std::string& raw_query,
+                                                  SearchStats* stats = nullptr) {
+        return distributor->search(raw_query, stats);
     }
 
 public:
@@ -445,23 +475,31 @@ public:
                                       int offset = 0, int limit = 10,
                                       int* total_out = nullptr,
                                       SearchStats* stats = nullptr) {
-        auto terms = query::compile(raw_query);
-        if (stats) stats->parsed_tokens = terms;
+        auto compiled = query::compile(raw_query);
+        auto& terms = compiled.terms;
+        if (stats) {
+            stats->parsed_tokens = terms;
+            if (compiled.ast) stats->parsed_query_ast = compiled.ast->to_string();
+        }
 
-        if (terms.empty()) {
+        if (compiled.empty()) {
             if (total_out) *total_out = 0;
             return {};
         }
 
         load_and_apply_weights(weights_path);
 
-        // distributed path: shards generated their own snippets already
+        // distributed path: phase-1 fetches results (no snippets), then
+        // phase-2 fetches snippets only for the paginated page
         if (distributor) {
-            auto all = search_distributed(terms, stats);
+            auto all = search_distributed(raw_query, stats);
             if (total_out) *total_out = static_cast<int>(all.size());
             if (offset >= static_cast<int>(all.size())) return {};
             int end = std::min(offset + limit, static_cast<int>(all.size()));
-            return std::vector<SearchResult>(all.begin() + offset, all.begin() + end);
+            std::vector<SearchResult> page(all.begin() + offset,
+                                            all.begin() + end);
+            distributor->fetch_page_snippets(raw_query, page);
+            return page;
         }
 
         if (stats) stats->per_rank_matched.assign(indexes.size(), 0);
@@ -471,7 +509,7 @@ public:
         struct Tagged { SearchResult result; size_t level; };
         std::vector<Tagged> tagged;
         for (size_t r = 0; r < indexes.size(); r++) {
-            auto level_results = search_level(terms, r, stats);
+            auto level_results = search_level(compiled.ast.get(), terms, r, stats);
             for (auto& res : level_results) tagged.push_back({std::move(res), r});
         }
         std::sort(tagged.begin(), tagged.end(),
