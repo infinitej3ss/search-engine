@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -27,10 +28,31 @@ static u_int64_t peek_num_pages(const std::string& path) {
 // budgets for pathological input. reasonable crawler pages have at most a
 // few thousand body words; anything beyond this cap is almost certainly a bug
 // the file timeout bounds damage from any bad doc we can't preempt
-constexpr size_t MAX_BODY_WORDS = 100000;
-constexpr size_t MAX_TITLE_WORDS = 2000;
-constexpr size_t MAX_ANCHOR_WORDS = 50000;
+constexpr size_t MAX_BODY_WORDS = 15000;
+constexpr size_t MAX_TITLE_WORDS = 500;
+constexpr size_t MAX_ANCHOR_WORDS = 10000;
 constexpr double PER_FILE_TIMEOUT_SECS = 300.0;  // 5 min
+constexpr size_t MAX_WORD_LEN = 25;
+
+constexpr size_t MIN_CLEAN_WORDS = 50;
+constexpr double MIN_SURVIVAL_RATIO = 0.2;
+
+static bool is_indexable_word(const std::string& w) {
+    if (w.empty() || w.size() > MAX_WORD_LEN) return false;
+    int non_alnum = 0;
+    for (unsigned char c : w) {
+        if (c < 0x20 || c == 0x7f) return false;
+        if (!std::isalnum(c)) non_alnum++;
+    }
+    if (non_alnum > static_cast<int>(w.size()) / 2) return false;
+    return true;
+}
+
+static void filter_words(std::vector<std::string>& words) {
+    words.erase(std::remove_if(words.begin(), words.end(),
+        [](const std::string& w) { return !is_indexable_word(w); }),
+        words.end());
+}
 
 struct SkippedDoc {
     std::string url;
@@ -141,7 +163,24 @@ int main(int argc, char** argv) {
 
             PageData page;
             int page_index;
+            int file_skipped_quality = 0;
             while ((page_index = get_next_page(page)) != -1) {
+                size_t raw_words = page.words.size();
+
+                filter_words(page.words);
+                filter_words(page.titlewords);
+                filter_words(page.anchor_text);
+
+                // skip pages that are mostly non-text content
+                double survival = raw_words > 0
+                    ? static_cast<double>(page.words.size()) / raw_words
+                    : 0.0;
+                if (page.words.size() < MIN_CLEAN_WORDS ||
+                    survival < MIN_SURVIVAL_RATIO) {
+                    file_skipped_quality++;
+                    continue;
+                }
+
                 // pre-check: skip pathological docs without running addDocument
                 if (page.words.size() > MAX_BODY_WORDS ||
                     page.titlewords.size() > MAX_TITLE_WORDS ||
@@ -229,6 +268,12 @@ int main(int argc, char** argv) {
                              file_docs_added,
                              static_cast<unsigned long long>(file_pages),
                              filename.c_str());
+                std::fflush(stderr);
+            }
+            if (file_skipped_quality > 0) {
+                std::fprintf(stderr,
+                             "\n  skipped %d low-quality pages in %s\n",
+                             file_skipped_quality, filename.c_str());
                 std::fflush(stderr);
             }
             close_page_file();

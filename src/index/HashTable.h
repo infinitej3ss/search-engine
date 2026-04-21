@@ -50,9 +50,9 @@ template< typename Key, typename Value > class HashTable
 
       Bucket< Key, Value > **buckets;
       size_t numberOfBuckets;
-      uint64_t ( *hash )( const Key );
+      uint64_t ( *hash )( const Key & );
       // YOUR CODE HERE
-      bool (*compareEqual)(const Key, const Key);
+      bool (*compareEqual)(const Key &, const Key &);
        
       size_t uniqueKeys;
 
@@ -64,7 +64,7 @@ template< typename Key, typename Value > class HashTable
 
    public:
 
-      Tuple< Key, Value > *Find( const Key k, const Value initialValue )
+      Tuple< Key, Value > *Find( const Key &k, const Value initialValue )
          {
          // Search for the key k and return a pointer to the
          // ( key, value ) entry.  If the key is not already
@@ -96,7 +96,7 @@ template< typename Key, typename Value > class HashTable
               return &nb->tuple;
          }
 
-      Tuple< Key, Value > *Find( const Key k ) const
+      Tuple< Key, Value > *Find( const Key &k ) const
          {
          // Search for the key k and return a pointer to the
          // ( key, value ) enty.  If the key is not already
@@ -154,8 +154,8 @@ template< typename Key, typename Value > class HashTable
       // true if the keys are equal.  The hash function should
       // return a 64-bit value.
 
-      HashTable( bool ( *compareEqual )( const Key, const Key ),
-           uint64_t ( *hash )( const Key ),
+      HashTable( bool ( *compareEqual )( const Key &, const Key & ),
+           uint64_t ( *hash )( const Key & ),
            size_t numberOfBuckets ) : numberOfBuckets(numberOfBuckets), hash(hash), compareEqual(compareEqual), uniqueKeys(0)
          {
             buckets = new Bucket<Key, Value>*[numberOfBuckets]();

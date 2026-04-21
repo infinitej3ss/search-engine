@@ -24,24 +24,25 @@ bool optVerbose = false;
 
 // YOUR CODE HERE
 // FNV bc std::hash hashes pointers
-uint64_t str_hash(const char *k) {
+uint64_t str_hash(const char * const &k) {
     uint64_t h = 1469598103934665603ULL;
-    while (*k) {
-        h ^= static_cast<unsigned char>(*k++);
+    const char *p = k;
+    while (*p) {
+        h ^= static_cast<unsigned char>(*p++);
         h *= 1099511628211ULL;
     }
     return h;
 }
 
-bool CompareEqual(const char *lhs, const char *rhs) {
+bool CompareEqual(const char * const &lhs, const char * const &rhs) {
     return strcmp(lhs, rhs) == 0;
 }
 
-uint64_t str_hash(const std::string k) {
+uint64_t str_hash(const std::string &k) {
     return str_hash(k.c_str());
 }
 
-bool CompareEqual(const std::string lhs, const std::string rhs) {
+bool CompareEqual(const std::string &lhs, const std::string &rhs) {
     return lhs == rhs;
 }
 
@@ -59,7 +60,7 @@ using Pair = Tuple< const char *, size_t >;
 // Caller is responsible for deleting the Hash.
 
 Hash *BuildHashTable( const vector< string > &words,
-      uint64_t ( *hash )( const char *key ) )
+      uint64_t ( *hash )( const char * const &key ) )
    {
    Hash *output = new Hash(CompareEqual, str_hash, 128);
 

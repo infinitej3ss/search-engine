@@ -15,11 +15,11 @@
 
 // YOUR CODE HERE
 
-uint64_t str_hash( const char * k );
-uint64_t str_hash( const std::string k );
+uint64_t str_hash( const char * const &k );
+uint64_t str_hash( const std::string &k );
 
-bool CompareEqual(char const*, char const*);
-bool CompareEqual(const std::string lhs, const std::string rhs);
+bool CompareEqual(char const * const &, char const * const &);
+bool CompareEqual(const std::string &lhs, const std::string &rhs);
 
 // Build a HashTable of strings and numbers of occurrences, given a vector
 // of strings representing the words.  You may assume the vector and the
@@ -30,7 +30,7 @@ bool CompareEqual(const std::string lhs, const std::string rhs);
 // Caller is responsible for deleting the Hash.
 
 HashTable< const char *, size_t > *BuildHashTable( const vector< string > &words,
-      uint64_t ( *hash )( const char *key ) = str_hash);
+      uint64_t ( *hash )( const char * const &key ) = str_hash);
 
 
 // Collect words read from a file specified on the command line
