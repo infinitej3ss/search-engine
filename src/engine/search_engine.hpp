@@ -411,8 +411,9 @@ public:
 
 private:
     std::vector<SearchResult> search_distributed(const std::string& raw_query,
-                                                  SearchStats* stats = nullptr) {
-        return distributor->search(raw_query, stats);
+                                                  SearchStats* stats = nullptr,
+                                                  const std::string& weights_param = "") {
+        return distributor->search(raw_query, stats, weights_param);
     }
 
 public:
@@ -474,7 +475,8 @@ public:
     std::vector<SearchResult> search(const std::string& raw_query,
                                       int offset = 0, int limit = 10,
                                       int* total_out = nullptr,
-                                      SearchStats* stats = nullptr) {
+                                      SearchStats* stats = nullptr,
+                                      bool dev_mode = false) {
         auto compiled = query::compile(raw_query);
         auto& terms = compiled.terms;
         if (stats) {
@@ -492,7 +494,8 @@ public:
         // distributed path: phase-1 fetches results (no snippets), then
         // phase-2 fetches snippets only for the paginated page
         if (distributor) {
-            auto all = search_distributed(raw_query, stats);
+            std::string wp = dev_mode ? serialize_weights() : "";
+            auto all = search_distributed(raw_query, stats, wp);
             if (total_out) *total_out = static_cast<int>(all.size());
             if (offset >= static_cast<int>(all.size())) return {};
             int end = std::min(offset + limit, static_cast<int>(all.size()));

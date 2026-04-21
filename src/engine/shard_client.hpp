@@ -185,11 +185,15 @@ public:
     int stream_query(const std::string& query_str,
                      int recv_timeout_ms,
                      const ResultCallback& on_result,
-                     const StatsCallback& on_stats = nullptr) {
+                     const StatsCallback& on_stats = nullptr,
+                     const std::string& weights_param = "") {
         int fd = connect_to_shard(recv_timeout_ms);
         if (fd < 0) return 0;
 
         std::string path = "query?q=" + url_encode(query_str);
+        if (!weights_param.empty()) {
+            path += "&w=" + url_encode(weights_param);
+        }
 
         if (!send_request(fd, path)) {
             close(fd);

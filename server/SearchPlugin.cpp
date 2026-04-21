@@ -132,9 +132,16 @@ static SearchEngine make_engine() {
 class SearchPlugin : public PluginObject {
 private:
     SearchEngine engine;
+    bool dev_mode;
 
 public:
-    SearchPlugin() : engine(make_engine()) {
+    SearchPlugin()
+        : engine(make_engine()),
+          dev_mode(std::getenv("DEV_MODE") != nullptr) {
+        if (dev_mode) {
+            std::fprintf(stderr, "[search] dev mode enabled — "
+                         "weights will be forwarded to shards\n");
+        }
         Plugin = this;
     }
 
@@ -150,7 +157,8 @@ public:
         int total = 0;
         SearchStats stats;
         auto start = std::chrono::steady_clock::now();
-        auto results = engine.search(query_str, offset, limit, &total, &stats);
+        auto results = engine.search(query_str, offset, limit, &total, &stats,
+                                     dev_mode);
         double took_ms = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - start).count();
 

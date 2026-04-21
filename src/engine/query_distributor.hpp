@@ -45,7 +45,8 @@ private:
                        std::atomic<int>* good_count,
                        std::atomic<bool>* stop_flag,
                        SearchStats* agg_stats,
-                       std::atomic<int>* alive_workers) {
+                       std::atomic<int>* alive_workers,
+                       const std::string* weights_param) {
         auto on_result = [&](const SearchResult& r) -> bool {
             if (stop_flag->load()) return false;
 
@@ -68,7 +69,8 @@ private:
             agg_stats->merge(s);
         };
 
-        client->stream_query(query, shard_timeout_ms, on_result, on_stats);
+        client->stream_query(query, shard_timeout_ms, on_result, on_stats,
+                             weights_param ? *weights_param : "");
         alive_workers->fetch_sub(1);
     }
 
@@ -131,7 +133,8 @@ public:
     bool has_shards() const { return !shards.empty(); }
 
     std::vector<SearchResult> search(const std::string& query_str,
-                                      SearchStats* stats = nullptr) {
+                                      SearchStats* stats = nullptr,
+                                      const std::string& weights_param = "") {
         std::vector<SearchResult> all_results;
         std::mutex mtx;
         std::atomic<int> good_count(0);
@@ -146,7 +149,7 @@ public:
                 &shards[i], static_cast<int>(i), std::cref(query_str),
                 shard_timeout_ms, good_threshold,
                 &all_results, &mtx, &good_count, &stop_flag,
-                stats, &alive_workers);
+                stats, &alive_workers, &weights_param);
         }
 
         // watcher: signal stop when we have enough good results OR
