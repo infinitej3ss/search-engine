@@ -187,6 +187,12 @@ public:
         }
 
         std::string query_str = get_query_param(request, "q");
+        std::string weights_str = get_query_param(request, "w");
+
+        // dev mode: leader sent weights — apply them for this query
+        if (!weights_str.empty()) {
+            apply_weights_from_string(weights_str);
+        }
 
         std::string header = "HTTP/1.1 200 OK\r\n"
                              "Content-Type: application/x-ndjson\r\n"

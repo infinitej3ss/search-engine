@@ -1,0 +1,8 @@
+# local shard test config — two shards on localhost
+timeout_ms 5000
+shard_timeout_ms 4000
+results_needed 20
+good_threshold 0.3
+
+127.0.0.1:9001
+127.0.0.1:9002
