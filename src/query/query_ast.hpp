@@ -301,27 +301,34 @@ inline void normalize(QueryNode& node) {
 
 namespace detail {
 
-inline void collect_words(const QueryNode& n, std::vector<std::string>& out) {
+inline void collect_words(const QueryNode& n,
+                          std::vector<std::string>& out,
+                          std::unordered_set<std::string>& phrase_terms,
+                          bool in_phrase = false) {
   if (n.kind == QueryNode::WORD) {
     out.push_back(n.term);
+    if (in_phrase) phrase_terms.insert(n.term);
     return;
   }
-  for (auto& c : n.kids) collect_words(*c, out);
+  bool phrase = in_phrase || n.kind == QueryNode::PHRASE;
+  for (auto& c : n.kids) collect_words(*c, out, phrase_terms, phrase);
 }
 
 }  // namespace detail
 
 // flatten every WORD in the AST, stop-filter (with fallback if that empties),
-// and dedupe in first-seen order. used for BM25 / T1 / ranker signals
+// and dedupe in first-seen order. stopwords inside phrases are always kept.
+// used for BM25 / T1 / ranker signals
 inline std::vector<std::string> extract_terms(const QueryNode& root) {
   std::vector<std::string> raw;
-  detail::collect_words(root, raw);
+  std::unordered_set<std::string> phrase_terms;
+  detail::collect_words(root, raw, phrase_terms);
 
   const auto& stops = stop_words();
   std::vector<std::string> filtered;
   filtered.reserve(raw.size());
   for (auto& t : raw) {
-    if (!stops.count(t)) filtered.push_back(t);
+    if (!stops.count(t) || phrase_terms.count(t)) filtered.push_back(t);
   }
   std::vector<std::string>& kept = filtered.empty() ? raw : filtered;
 

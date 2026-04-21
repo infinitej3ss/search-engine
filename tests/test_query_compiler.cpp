@@ -85,10 +85,12 @@ TEST_CASE("stop-word removal and de-dup combine cleanly", "[query]") {
 }
 
 TEST_CASE("phrases preserve stop words for retrieval", "[query]") {
-  // stop words inside a phrase survive in the AST (phrases untouched by
-  // normalize). the terms list is stop-filtered though, so only non-stop
-  // words from the phrase appear. "not" is not a stop word
+  // stop words inside a phrase are kept in extract_terms so that scoring
+  // signals (BM25, metastream, span) can use them
   auto t = terms("\"to be or not to be\"");
-  REQUIRE(t.size() >= 1);
-  REQUIRE(t[0] == "not");
+  REQUIRE(t.size() == 4);  // to, be, or, not (deduped)
+  REQUIRE(t[0] == "to");
+  REQUIRE(t[1] == "be");
+  REQUIRE(t[2] == "or");
+  REQUIRE(t[3] == "not");
 }
