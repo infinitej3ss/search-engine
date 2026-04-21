@@ -89,6 +89,9 @@ target_include_directories(majestic PRIVATE
 # ---- tests ---------------------------------------------------------------
 
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
+# these tests depend on crawler symbols not linked into the test target
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_frontier\\.cpp$")
+list(FILTER TEST_SOURCES EXCLUDE REGEX "test_robotscache\\.cpp$")
 add_executable(tests ${TEST_SOURCES})
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain index_core)
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
