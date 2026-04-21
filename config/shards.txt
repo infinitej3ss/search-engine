@@ -8,8 +8,8 @@ results_needed 50
 good_threshold 0.6
 
 # shards — running locally for testing (one per rank blob)
-34.173.23.133:9000
-34.58.246.21:9000
+34.46.166.55:9000
+34.56.111.12:9000
 35.239.83.9:9000
 34.10.126.25:9000
 34.132.211.46:9000
