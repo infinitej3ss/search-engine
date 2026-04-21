@@ -100,7 +100,17 @@ for p in 8080 9000 9001 9002 9003 9004; do
 done
 ```
 
-In distributed mode, each shard reads its own copy of `config/weights.txt` — keep them in sync across machines (or use a shared filesystem).
+In distributed mode, each shard reads its own copy of `config/weights.txt` — keep them in sync across machines (or use a shared filesystem). To iterate on weights without redeploying to every shard, see **Dev mode** below.
+
+### Dev mode (weight tuning)
+
+When tuning ranking weights, set `DEV_MODE=1` on the leader. The leader will forward its current `config/weights.txt` values to every shard with each query, so you only need to edit one file:
+
+```bash
+DEV_MODE=1 LEADER_SHARDS_CONFIG=config/shards.txt build/search_server 8080 ./frontend
+```
+
+Edit `config/weights.txt` on the leader, re-run a query, and the shards will use the updated weights immediately (weights are reloaded per-query). When `DEV_MODE` is not set, shards use their own local `config/weights.txt` as usual.
 
 ### Run distributed across multiple machines (VMs)
 
