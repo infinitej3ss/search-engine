@@ -81,6 +81,8 @@ static std::string results_to_json(const std::string& query,
         json << "\"" << json_escape(stats.parsed_tokens[i]) << "\"";
     }
     json << "],";
+    json << "\"parsed_query_ast\":\""
+         << json_escape(stats.parsed_query_ast) << "\",";
     json << "\"constraint_solved\":" << stats.constraint_solved << ",";
     json << "\"passed_static_floor\":" << stats.passed_static_floor << ",";
     json << "\"per_rank_matched\":[";

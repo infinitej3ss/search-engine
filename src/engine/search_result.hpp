@@ -19,6 +19,7 @@ struct SearchResult {
     double t2 = 0.0; // span / proximity
     double t3 = 0.0; // hop-distance quality
     double bm25 = 0.0; // normalized bm25
+    int shard_idx = -1; // origin shard index (distributed mode only)
 };
 
 // per-query diagnostics for the right-rail debug widgets. populated in

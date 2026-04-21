@@ -394,6 +394,21 @@ public:
 
     size_t num_levels() const { return indexes.size(); }
 
+    // fetch a snippet for a single doc_id (phase-2 distributed snippets).
+    // searches all levels for the doc_id since the caller may not know the
+    // rank. returns empty string if the doc can't be found or has no page data
+    std::string fetch_snippet_by_id(int doc_id,
+                                     const std::vector<std::string>& terms) const {
+        for (const auto& idx : indexes) {
+            if (doc_id < 0 || doc_id >= idx->GetDocumentCount()) continue;
+            auto meta = idx->GetDocumentMetadata(doc_id);
+            if (meta.url.empty()) continue;
+            auto s = fetch_snippet(terms, meta);
+            if (!s.empty()) return s;
+        }
+        return "";
+    }
+
 private:
     std::vector<SearchResult> search_distributed(const std::string& raw_query,
                                                   SearchStats* stats = nullptr) {
@@ -474,13 +489,17 @@ public:
 
         load_and_apply_weights(weights_path);
 
-        // distributed path: SNIPPETS TODO
+        // distributed path: phase-1 fetches results (no snippets), then
+        // phase-2 fetches snippets only for the paginated page
         if (distributor) {
             auto all = search_distributed(raw_query, stats);
             if (total_out) *total_out = static_cast<int>(all.size());
             if (offset >= static_cast<int>(all.size())) return {};
             int end = std::min(offset + limit, static_cast<int>(all.size()));
-            return std::vector<SearchResult>(all.begin() + offset, all.begin() + end);
+            std::vector<SearchResult> page(all.begin() + offset,
+                                            all.begin() + end);
+            distributor->fetch_page_snippets(raw_query, page);
+            return page;
         }
 
         if (stats) stats->per_rank_matched.assign(indexes.size(), 0);

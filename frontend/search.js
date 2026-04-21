@@ -99,8 +99,27 @@ function renderSidebar(data) {
     const stats = data.stats;
     if (!stats) return;
 
-    // widget 1: parsed tokens
-    if (stats.parsed_tokens && stats.parsed_tokens.length > 0) {
+    // widget 1: parsed query AST (falls back to flat token chips)
+    if (stats.parsed_query_ast) {
+        const w = makeWidget("parsed query");
+        const pre = document.createElement("pre");
+        pre.className = "ast-display";
+        pre.textContent = stats.parsed_query_ast;
+        w.body.appendChild(pre);
+
+        if (stats.parsed_tokens && stats.parsed_tokens.length > 0) {
+            const chips = document.createElement("div");
+            chips.className = "chips";
+            for (const t of stats.parsed_tokens) {
+                const c = document.createElement("span");
+                c.className = "chip";
+                c.textContent = t;
+                chips.appendChild(c);
+            }
+            w.body.appendChild(chips);
+        }
+        sidebarDiv.appendChild(w.root);
+    } else if (stats.parsed_tokens && stats.parsed_tokens.length > 0) {
         const w = makeWidget("searched for");
         const chips = document.createElement("div");
         chips.className = "chips";

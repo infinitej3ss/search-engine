@@ -11,6 +11,7 @@
 #include <string>
 #include <functional>
 #include <cstring>
+#include <unordered_map>
 #include <iostream>
 #include <unistd.h>
 #include <sys/types.h>
@@ -244,5 +245,64 @@ public:
 
         close(fd);
         return delivered;
+    }
+
+    // phase-2: fetch snippets for specific doc_ids after leader pagination.
+    // returns a map of doc_id -> snippet text
+    std::unordered_map<int, std::string> fetch_snippets(
+            const std::string& query_str,
+            const std::vector<int>& doc_ids,
+            int recv_timeout_ms) {
+        std::unordered_map<int, std::string> out;
+        if (doc_ids.empty()) return out;
+
+        int fd = connect_to_shard(recv_timeout_ms);
+        if (fd < 0) return out;
+
+        // build doc_ids csv
+        std::string ids_csv;
+        for (size_t i = 0; i < doc_ids.size(); i++) {
+            if (i > 0) ids_csv += ",";
+            ids_csv += std::to_string(doc_ids[i]);
+        }
+
+        std::string path = "snippet?q=" + url_encode(query_str)
+                         + "&doc_ids=" + ids_csv;
+        if (!send_request(fd, path)) {
+            close(fd);
+            return out;
+        }
+
+        // read response, parse ndjson snippet lines
+        std::string buffer;
+        char recv_buf[4096];
+        bool headers_done = false;
+
+        while (true) {
+            ssize_t n = recv(fd, recv_buf, sizeof(recv_buf), 0);
+            if (n <= 0) break;
+            buffer.append(recv_buf, n);
+
+            if (!headers_done) {
+                size_t end = buffer.find("\r\n\r\n");
+                if (end == std::string::npos) continue;
+                buffer.erase(0, end + 4);
+                headers_done = true;
+            }
+
+            while (true) {
+                size_t nl = buffer.find('\n');
+                if (nl == std::string::npos) break;
+                std::string line = buffer.substr(0, nl);
+                buffer.erase(0, nl + 1);
+
+                int did = extract_int(line, "doc_id");
+                std::string snip = extract_string(line, "snippet");
+                if (!snip.empty()) out[did] = std::move(snip);
+            }
+        }
+
+        close(fd);
+        return out;
     }
 };
