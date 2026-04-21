@@ -66,6 +66,7 @@ header {
 
 header form {
     display: flex;
+    align-items: center;
     gap: 8px;
 }
 
@@ -202,6 +203,42 @@ header button {
     font-size: 0.75rem;
     color: #888;
     margin-top: 6px;
+}
+
+.syntax-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #aaa;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    color: #888;
+    cursor: help;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.syntax-hint:hover {
+    color: #333;
+    border-color: #333;
+}
+
+.syntax-hint:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: #333;
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 4px 10px;
+    z-index: 10;
+    pointer-events: none;
 }
 
 .ast-display {
