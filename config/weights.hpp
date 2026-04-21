@@ -15,11 +15,12 @@ struct WeightProfile {
   double w_quality;          // T3
   double w_bm25;             // T4
   double w_title_coverage;   // T5
+  int max_per_host;          // host collapsing limit (0 = unlimited)
 };
 
 // defaults are zero — must load from config/weights.txt before ranking
-inline WeightProfile GENERAL      = {0.0, 0.0, 0.0, 0.0, 0.0};
-inline WeightProfile NAVIGATIONAL = {0.0, 0.0, 0.0, 0.0, 0.0};
+inline WeightProfile GENERAL      = {0.0, 0.0, 0.0, 0.0, 0.0, 2};
+inline WeightProfile NAVIGATIONAL = {0.0, 0.0, 0.0, 0.0, 0.0, 0};
 
 // power-weight alpha for static^α × dynamic^(1-α) combination.
 // 0.5 = equal weight, <0.5 = favor dynamic (relevance), >0.5 = favor static (quality)
@@ -85,11 +86,13 @@ inline bool load_and_apply_weights(const std::string& path) {
     else if (key == "profile.general.quality")         GENERAL.w_quality         = value;
     else if (key == "profile.general.bm25")            GENERAL.w_bm25            = value;
     else if (key == "profile.general.title_coverage")  GENERAL.w_title_coverage  = value;
+    else if (key == "profile.general.max_per_host")   GENERAL.max_per_host     = static_cast<int>(value);
     else if (key == "profile.navigational.metastream") NAVIGATIONAL.w_metastream = value;
     else if (key == "profile.navigational.span")       NAVIGATIONAL.w_span       = value;
     else if (key == "profile.navigational.quality")    NAVIGATIONAL.w_quality    = value;
     else if (key == "profile.navigational.bm25")       NAVIGATIONAL.w_bm25       = value;
     else if (key == "profile.navigational.title_coverage") NAVIGATIONAL.w_title_coverage = value;
+    else if (key == "profile.navigational.max_per_host") NAVIGATIONAL.max_per_host = static_cast<int>(value);
 
     else if (key == "combine_alpha")                   COMBINE_ALPHA             = value;
     else if (key == "static_floor")                    STATIC_FLOOR              = value;
@@ -128,11 +131,13 @@ inline std::string serialize_weights() {
     << ";profile.general.quality=" << GENERAL.w_quality
     << ";profile.general.bm25=" << GENERAL.w_bm25
     << ";profile.general.title_coverage=" << GENERAL.w_title_coverage
+    << ";profile.general.max_per_host=" << GENERAL.max_per_host
     << ";profile.navigational.metastream=" << NAVIGATIONAL.w_metastream
     << ";profile.navigational.span=" << NAVIGATIONAL.w_span
     << ";profile.navigational.quality=" << NAVIGATIONAL.w_quality
     << ";profile.navigational.bm25=" << NAVIGATIONAL.w_bm25
     << ";profile.navigational.title_coverage=" << NAVIGATIONAL.w_title_coverage
+    << ";profile.navigational.max_per_host=" << NAVIGATIONAL.max_per_host
     << ";combine_alpha=" << COMBINE_ALPHA
     << ";static_floor=" << STATIC_FLOOR
     << ";field.url=" << W_FIELD_URL
@@ -178,11 +183,13 @@ inline bool apply_weights_from_string(const std::string& data) {
     else if (key == "profile.general.quality")         GENERAL.w_quality         = value;
     else if (key == "profile.general.bm25")            GENERAL.w_bm25            = value;
     else if (key == "profile.general.title_coverage")  GENERAL.w_title_coverage  = value;
+    else if (key == "profile.general.max_per_host")   GENERAL.max_per_host     = static_cast<int>(value);
     else if (key == "profile.navigational.metastream") NAVIGATIONAL.w_metastream = value;
     else if (key == "profile.navigational.span")       NAVIGATIONAL.w_span       = value;
     else if (key == "profile.navigational.quality")    NAVIGATIONAL.w_quality    = value;
     else if (key == "profile.navigational.bm25")       NAVIGATIONAL.w_bm25       = value;
     else if (key == "profile.navigational.title_coverage") NAVIGATIONAL.w_title_coverage = value;
+    else if (key == "profile.navigational.max_per_host") NAVIGATIONAL.max_per_host = static_cast<int>(value);
 
     else if (key == "combine_alpha")                   COMBINE_ALPHA             = value;
     else if (key == "static_floor")                    STATIC_FLOOR              = value;

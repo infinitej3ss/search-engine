@@ -18,12 +18,14 @@ profile.general.span            0.25
 profile.general.quality         0.08
 profile.general.bm25            0.37
 profile.general.title_coverage  0.15
+profile.general.max_per_host    2
 
 profile.navigational.metastream 0.40
 profile.navigational.span       0.10
 profile.navigational.quality    0.15
 profile.navigational.bm25       0.25
 profile.navigational.title_coverage 0.10
+profile.navigational.max_per_host 0
 
 # combination
 # static^α × dynamic^(1-α). <0.5 favors relevance, >0.5 favors quality
