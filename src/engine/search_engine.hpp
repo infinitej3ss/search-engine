@@ -434,6 +434,17 @@ private:
 
 public:
     // local mode: load blobs from data_dir, fall back to demo corpus
+    static void init_blacklist(const std::string& weights_file) {
+        if (BLACKLIST.loaded) return;
+        std::string dir = weights_file.substr(0, weights_file.find_last_of('/') + 1);
+        std::string bl_path = dir + "../src/ranker/static/data/blacklist.txt";
+        load_blacklist(bl_path);
+        if (BLACKLIST.loaded) {
+            std::fprintf(stderr, "[engine] loaded blacklist (%zu anywhere, %zu bounded)\n",
+                         BLACKLIST.anywhere.size(), BLACKLIST.bounded.size());
+        }
+    }
+
     SearchEngine(const std::string& weights_file,
                  const std::string& data_dir_ = ".")
         : weights_path(weights_file), data_dir(ensure_trailing_slash(data_dir_)) {
@@ -442,6 +453,7 @@ public:
             std::cerr << "[engine] warning: could not load " << weights_path
                       << ", all weights are zero" << std::endl;
         }
+        init_blacklist(weights_path);
 
         if (load_rank_blobs(data_dir_) == 0) {
             std::cerr << "[engine] no index blobs found in " << data_dir_
@@ -466,6 +478,7 @@ public:
         if (!load_and_apply_weights(weights_path)) {
             std::cerr << "[engine] warning: could not load " << weights_path << std::endl;
         }
+        init_blacklist(weights_path);
 
         distributor = new QueryDistributor(shards_config);
 
