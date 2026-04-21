@@ -142,3 +142,12 @@ TEST_CASE("SearchEngine::search fills snippet from page file",
 
   std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("get_page_file_num handles directory prefix",
+          "[page_data]") {
+  REQUIRE(get_page_file_num("crawled_page_data_rank_1_num_5") == 5);
+  REQUIRE(get_page_file_num("./crawled_page_data_rank_1_num_5") == 5);
+  REQUIRE(get_page_file_num("/data/crawled_page_data_rank_2_num_17") == 17);
+  REQUIRE(get_page_file_num("crawled_page_data_rank_0_num_0") == 0);
+  REQUIRE(get_page_file_num("invalid_file") == __INT64_MAX__);
+}

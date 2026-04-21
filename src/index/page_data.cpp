@@ -360,26 +360,12 @@ u_int64_t get_page_file_rank(const std::string& file_name) {
 //
 // returns __INT64_MAX__ if the page is invalid
 u_int64_t get_page_file_num(const std::string& file_name) {
-    if (file_name.length() < std::string("crawled_page_data_rank_x").length()) {
+    const std::string marker = "_num_";
+    size_t pos = file_name.rfind(marker);
+    if (pos == std::string::npos) {
         return __INT64_MAX__;
     }
-
-    u_int64_t index = std::string("crawled_page_data_rank_").length();  // location the number should start at
-
-    // search until finding the end of the rank number
-    while (index < file_name.length() && file_name[index] != '_') {
-        index++;
-    }
-
-    if (index == file_name.length() || file_name[index] != '_') {
-        return __INT64_MAX__;
-    }
-
-    index += 5; // skip "_num_"
-
-    std::string num(file_name.begin() + index, file_name.end());
-
-    return atoi(num.c_str());
+    return std::strtoull(file_name.c_str() + pos + marker.size(), nullptr, 10);
 }
 
 // initializes the page file directory specified for writing
