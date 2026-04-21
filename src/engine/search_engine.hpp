@@ -11,9 +11,11 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "search_result.hpp"
+#include "url_utils.hpp"
 #include "query_distributor.hpp"
 #include "../index/index.h"
 #include "../index/index_builder.h"
@@ -379,6 +381,7 @@ public:
             double ds = score_dynamic(terms, c.cand, wp, bm25_norm, n_docs, &doc_freq);
 
             std::string title = join_title(c.meta.title_words);
+            if (blacklist_matches_text(title)) continue;
             // snippet deferred to post-pagination (see SearchEngine::search)
             SearchResult sr{c.doc_id, c.meta.url, title, "", ss, ds, s};
             // per-signal breakdown (cheap: these are already-computed primitives)
@@ -481,6 +484,25 @@ public:
         delete distributor;
     }
 
+    // collapse results so no single host dominates the page. walks the
+    // sorted results and keeps at most max_per_host per domain. input
+    // must already be sorted by score descending. 0 = no limit
+    template<typename T, typename UrlFn>
+    static std::vector<T> collapse_by_host(std::vector<T>& sorted,
+                                           UrlFn url_of, int max_per_host) {
+        if (max_per_host <= 0) return std::move(sorted);
+        std::unordered_map<std::string, int> host_count;
+        std::vector<T> out;
+        out.reserve(sorted.size());
+        for (auto& item : sorted) {
+            std::string host = extract_authority(url_of(item));
+            if (++host_count[host] <= max_per_host) {
+                out.push_back(std::move(item));
+            }
+        }
+        return out;
+    }
+
     // main entry point. takes raw user query, compiles it, searches
     // offset/limit for pagination. returns the page and total result count.
     // `stats` is optional; if provided it's filled with per-query diagnostics
@@ -509,6 +531,10 @@ public:
         if (distributor) {
             std::string wp = dev_mode ? serialize_weights() : "";
             auto all = search_distributed(raw_query, stats, wp);
+            const auto& profile = select_profile(terms);
+            all = collapse_by_host(all,
+                [](const SearchResult& r) -> const std::string& { return r.url; },
+                profile.max_per_host);
             if (total_out) *total_out = static_cast<int>(all.size());
             if (offset >= static_cast<int>(all.size())) return {};
             int end = std::min(offset + limit, static_cast<int>(all.size()));
@@ -533,6 +559,11 @@ public:
             [](const Tagged& a, const Tagged& b) {
                 return a.result.combined_score > b.result.combined_score;
             });
+
+        const auto& profile = select_profile(terms);
+        tagged = collapse_by_host(tagged,
+            [](const Tagged& t) -> const std::string& { return t.result.url; },
+            profile.max_per_host);
 
         if (total_out) *total_out = static_cast<int>(tagged.size());
         if (offset >= static_cast<int>(tagged.size())) return {};

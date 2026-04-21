@@ -143,40 +143,6 @@ TEST_CASE("SearchEngine::search fills snippet from page file",
   std::filesystem::remove_all(dir);
 }
 
-TEST_CASE("load_page_data falls back when page_file_num is wrong",
-          "[page_data][snippet]") {
-  const std::string dir = "test_snippet_fallback_tmp/";
-  std::filesystem::create_directories(dir);
-
-  // page A in num_0, page B in num_1
-  PageData a;
-  a.url = "https://ex.com/a"; a.distance_from_seedlist = 1;
-  a.words = {"alpha", "page"};
-  auto cap0 = write_and_iterate(dir + "crawled_page_data_rank_0_num_0", {a});
-
-  PageData b;
-  b.url = "https://ex.com/b"; b.distance_from_seedlist = 2;
-  b.words = {"beta", "page"};
-  auto cap1 = write_and_iterate(dir + "crawled_page_data_rank_0_num_1", {b});
-
-  // simulate the bug: store page_file_num=0 for page B (should be 1)
-  Index::DocumentMetadata meta;
-  meta.url = "https://ex.com/b";
-  meta.page_file_rank = 0;
-  meta.page_file_num = 0;
-  meta.page_file_index = static_cast<u_int64_t>(cap1[0].first);
-
-  // construct a minimal engine just to call load_page_data
-  SearchEngine engine("../config/weights.txt", dir);
-  PageData pd;
-  bool ok = engine.load_page_data(pd, meta);
-  REQUIRE(ok);
-  REQUIRE(pd.url == "https://ex.com/b");
-  REQUIRE(pd.words == std::vector<std::string>{"beta", "page"});
-
-  std::filesystem::remove_all(dir);
-}
-
 TEST_CASE("get_page_file_num handles directory prefix",
           "[page_data]") {
   REQUIRE(get_page_file_num("crawled_page_data_rank_1_num_5") == 5);

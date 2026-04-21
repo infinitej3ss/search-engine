@@ -64,6 +64,39 @@ inline void load_blacklist(const std::string& path) {
   BLACKLIST.loaded = true;
 }
 
+
+// checks title/text against blacklist terms. anywhere terms match as
+// substrings; bounded terms match against individual space-split words
+// (a word matches if it starts with a bounded term)
+inline bool blacklist_matches_text(const std::string& text) {
+  if (!BLACKLIST.loaded) return false;
+
+  std::string lower = text;
+  std::transform(lower.begin(), lower.end(), lower.begin(),
+    [](unsigned char c) { return std::tolower(c); });
+
+  for (const auto& term : BLACKLIST.anywhere) {
+    if (lower.find(term) != std::string::npos) return true;
+  }
+
+  // split into words and check each against bounded terms
+  size_t i = 0;
+  while (i < lower.size()) {
+    while (i < lower.size() && !std::isalnum(static_cast<unsigned char>(lower[i]))) i++;
+    size_t start = i;
+    while (i < lower.size() && std::isalnum(static_cast<unsigned char>(lower[i]))) i++;
+    if (i == start) continue;
+    std::string_view word(lower.data() + start, i - start);
+    for (const auto& term : BLACKLIST.bounded) {
+      if (word.size() >= term.size() && word.compare(0, term.size(), term) == 0) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 class UrlParser {
 private:
   std::string url;
