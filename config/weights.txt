@@ -16,8 +16,8 @@ blacklist               1.0
 profile.general.metastream      0.15
 profile.general.span            0.25
 profile.general.quality         0.08
-profile.general.bm25            0.32
-profile.general.title_coverage  0.20
+profile.general.bm25            0.37
+profile.general.title_coverage  0.15
 
 profile.navigational.metastream 0.40
 profile.navigational.span       0.10

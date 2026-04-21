@@ -223,19 +223,35 @@ inline double content_quality_penalty(const DocCandidate& doc) {
   return penalty;
 }
 
-// fraction of query terms that appear in the document title
+// idf-weighted title coverage: sum of idf for query terms found in title,
+// divided by total idf across all query terms. when no idf data is
+// available, falls back to uniform weighting (plain fraction)
 inline double t5_title_coverage(
     const std::vector<std::string>& query,
-    const DocCandidate& doc) {
+    const DocCandidate& doc,
+    int n_docs = 0,
+    const std::unordered_map<std::string, int>* doc_freq = nullptr) {
   if (query.empty()) return 0.0;
 
-  int found = 0;
+  double matched_weight = 0.0;
+  double total_weight = 0.0;
+
   for (const auto& term : query) {
-    for (const auto& w : doc.title_words) {
-      if (to_lower(w) == term) { ++found; break; }
+    double w = 1.0;
+    if (n_docs > 0 && doc_freq) {
+      int df = 0;
+      auto it = doc_freq->find(term);
+      if (it != doc_freq->end()) df = it->second;
+      w = std::log(1.0 + (n_docs - df + 0.5) / (df + 0.5));
+    }
+    total_weight += w;
+
+    for (const auto& tw : doc.title_words) {
+      if (to_lower(tw) == term) { matched_weight += w; break; }
     }
   }
-  return static_cast<double>(found) / static_cast<double>(query.size());
+
+  return total_weight > 0.0 ? matched_weight / total_weight : 0.0;
 }
 
 // top-level dynamic score = w1·T1 + w2·T2 + w3·T3 + w4·T4 + w5·T5
@@ -246,17 +262,19 @@ inline double score_dynamic(
     const std::vector<std::string>& query,
     const DocCandidate& doc,
     const WeightProfile& profile,
-    double bm25_score = 0.0) {
+    double bm25_score = 0.0,
+    int n_docs = 0,
+    const std::unordered_map<std::string, int>* doc_freq = nullptr) {
   double t1 = t1_metastream(query, doc);
   double t2 = t2_span(query, doc);
   double t3 = t3_quality(doc);
-  double t5 = t5_title_coverage(query, doc);
+  double t5 = t5_title_coverage(query, doc, n_docs, doc_freq);
 
-  double raw = profile.w_metastream * t1
-             + profile.w_span       * t2
-             + profile.w_quality    * t3
-             + profile.w_bm25      * bm25_score
-             + profile.w_title_coverage * t5;
+  double raw = profile.w_metastream      * t1
+             + profile.w_span            * t2
+             + profile.w_quality         * t3
+             + profile.w_bm25           * bm25_score
+             + profile.w_title_coverage  * t5;
 
   return raw * content_quality_penalty(doc);
 }

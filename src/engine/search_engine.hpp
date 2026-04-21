@@ -162,7 +162,9 @@ private:
     static double compute_score(const std::vector<std::string>& terms,
                                  const DocCandidate& cand,
                                  const WeightProfile& profile,
-                                 double bm25_norm = 0.0) {
+                                 double bm25_norm = 0.0,
+                                 int n_docs = 0,
+                                 const std::unordered_map<std::string, int>* doc_freq = nullptr) {
         RankerInput in;
         in.url = cand.url;
         in.is_https = (cand.url.find("https://") == 0);
@@ -179,7 +181,7 @@ private:
         // zeroed out when they're genuinely relevant
         s = std::max(s, STATIC_FLOOR);
 
-        double d = score_dynamic(terms, cand, profile, bm25_norm);
+        double d = score_dynamic(terms, cand, profile, bm25_norm, n_docs, doc_freq);
 
         // power-weighted combination: static^α × dynamic^(1-α)
         // α < 0.5 means dynamic (relevance) dominates over static (quality).
@@ -362,7 +364,7 @@ public:
 
         for (auto& c : candidates) {
             double bm25_norm = 1.0 / (1.0 + std::exp(-SIGMOID_K * (c.bm25_raw - median_bm25)));
-            double s = compute_score(terms, c.cand, wp, bm25_norm);
+            double s = compute_score(terms, c.cand, wp, bm25_norm, n_docs, &doc_freq);
             if (s <= 0.0) continue;
 
             RankerInput in;
@@ -373,7 +375,7 @@ public:
             in.word_count = 0;
             in.content_to_html_ratio = 0.0;
             double ss = StaticRanker(in).rank();
-            double ds = score_dynamic(terms, c.cand, wp, bm25_norm);
+            double ds = score_dynamic(terms, c.cand, wp, bm25_norm, n_docs, &doc_freq);
 
             std::string title = join_title(c.meta.title_words);
             // snippet deferred to post-pagination (see SearchEngine::search)
@@ -383,7 +385,7 @@ public:
             sr.t2 = t2_span(terms, c.cand);
             sr.t3 = t3_quality(c.cand);
             sr.bm25 = bm25_norm;
-            sr.t5 = t5_title_coverage(terms, c.cand);
+            sr.t5 = t5_title_coverage(terms, c.cand, n_docs, &doc_freq);
             results.push_back(std::move(sr));
 
             if (stats) {
