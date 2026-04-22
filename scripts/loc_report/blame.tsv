@@ -1,19 +1,19 @@
-config/weights.hpp	Astral Café	51
-config/weights.hpp	lytreallynb	58
-frontend/index.html	Astral Café	18
-frontend/results.html	Astral Café	25
-frontend/search.js	Astral Café	200
-frontend/style.css	Astral Café	207
+config/weights.hpp	Astral Café	155
+config/weights.hpp	lytreallynb	55
+frontend/index.html	Astral Café	20
+frontend/results.html	Astral Café	28
+frontend/search.js	Astral Café	219
+frontend/style.css	Astral Café	358
 server/LinuxTinyServer.cpp	Jess Morton	76
 server/LinuxTinyServer.cpp	Astral Café	31
 server/LinuxTinyServer.cpp	lytreallynb	416
 server/LinuxTinyServer.cpp	Abby Troost	17
 server/Plugin.h	Astral Café	16
 server/Plugin.h	lytreallynb	43
-server/SearchPlugin.cpp	Astral Café	165
-server/ShardPlugin.cpp	Astral Café	210
+server/SearchPlugin.cpp	Astral Café	180
+server/ShardPlugin.cpp	Astral Café	268
 server/html/index.html	Jess Morton	69
-src/build_index.cpp	Astral Café	261
+src/build_index.cpp	Astral Café	306
 src/build_index.cpp	lytreallynb	32
 src/crawler/BloomFilter.h	Jess Morton	2
 src/crawler/BloomFilter.h	Abby Troost	151
@@ -57,18 +57,20 @@ src/crawler/robots.txt/pause.cpp	Jess Morton	12
 src/crawler/worker_thread.cpp	Jess Morton	12
 src/crawler/worker_thread.cpp	Abby Troost	78
 src/crawler/worker_thread.h	Abby Troost	10
-src/engine/query_distributor.hpp	Astral Café	193
-src/engine/search_engine.hpp	Astral Café	495
-src/engine/search_result.hpp	Astral Café	48
-src/engine/shard_client.hpp	Astral Café	243
-src/engine/url_utils.hpp	Astral Café	37
-src/index/Common.cpp	claudire	141
-src/index/Common.h	claudire	44
-src/index/HashTable.h	claudire	261
-src/index/HashTable.h	Astral Café	15
+src/engine/query_distributor.hpp	Astral Café	228
+src/engine/search_engine.hpp	Astral Café	594
+src/engine/search_result.hpp	Astral Café	52
+src/engine/shard_client.hpp	Astral Café	313
+src/engine/url_utils.hpp	Astral Café	87
+src/index/Common.cpp	claudire	134
+src/index/Common.cpp	Astral Café	8
+src/index/Common.h	claudire	39
+src/index/Common.h	Astral Café	5
+src/index/HashTable.h	claudire	255
+src/index/HashTable.h	Astral Café	21
 src/index/blob_format.h	Astral Café	102
-src/index/constraint_solver.cpp	claudire	56
-src/index/constraint_solver.cpp	Astral Café	1
+src/index/constraint_solver.cpp	claudire	53
+src/index/constraint_solver.cpp	Astral Café	4
 src/index/constraint_solver.cpp	lytreallynb	27
 src/index/constraint_solver.h	claudire	15
 src/index/constraint_solver.h	Astral Café	6
@@ -79,54 +81,63 @@ src/index/index.h	claudire	3
 src/index/index.h	Astral Café	111
 src/index/index_builder.cpp	Astral Café	393
 src/index/index_builder.h	Astral Café	96
-src/index/isr.cpp	claudire	24
-src/index/isr.cpp	Astral Café	85
+src/index/isr.cpp	claudire	20
+src/index/isr.cpp	Astral Café	458
 src/index/isr.cpp	lytreallynb	4
 src/index/isr.h	claudire	8
-src/index/isr.h	Astral Café	20
-src/index/page_data.cpp	claudire	439
-src/index/page_data.cpp	Astral Café	53
+src/index/isr.h	Astral Café	225
+src/index/page_data.cpp	claudire	421
+src/index/page_data.cpp	Astral Café	62
 src/index/page_data.h	claudire	144
 src/index/page_data.h	Astral Café	13
 src/main.cpp	Astral Café	28
 src/main.cpp	lytreallynb	12
 src/majestic_million_parser.cpp	Abby Troost	47
-src/query/query_compiler.hpp	lytreallynb	69
+src/query/query_ast.hpp	Astral Café	404
+src/query/query_compiler.hpp	Astral Café	24
+src/query/query_compiler.hpp	lytreallynb	12
 src/ranker/dynamic/bm25.cpp	lytreallynb	58
 src/ranker/dynamic/bm25.hpp	Astral Café	49
 src/ranker/dynamic/bm25.hpp	lytreallynb	13
-src/ranker/dynamic/dynamic_ranker.hpp	Astral Café	166
+src/ranker/dynamic/dynamic_ranker.hpp	Astral Café	219
 src/ranker/dynamic/dynamic_ranker.hpp	lytreallynb	61
-src/ranker/dynamic/span_finder.hpp	lytreallynb	88
+src/ranker/dynamic/span_finder.hpp	Astral Café	1
+src/ranker/dynamic/span_finder.hpp	lytreallynb	80
+src/ranker/dynamic/span_result.hpp	Astral Café	12
 src/ranker/dynamic/text.hpp	lytreallynb	33
 src/ranker/static/static_ranker.hpp	Astral Café	73
 src/ranker/static/static_ranker.hpp	Abby Troost	111
-src/ranker/static/url_parser.hpp	Astral Café	270
+src/ranker/static/url_parser.hpp	Astral Café	303
 test_ranker.cpp	Astral Café	72
 tests/test_blob_v4_writer.cpp	Astral Café	176
-tests/test_constraint_solver.cpp	Astral Café	34
-tests/test_constraint_solver.cpp	lytreallynb	87
 tests/test_dynamic_ranker.cpp	Astral Café	1
 tests/test_dynamic_ranker.cpp	lytreallynb	94
 tests/test_frontier.cpp	Abby Troost	17
 tests/test_helpers.h	Astral Café	48
-tests/test_index_case_folding.cpp	Astral Café	111
-tests/test_index_doc_boundaries.cpp	Astral Café	111
+tests/test_index_case_folding.cpp	Astral Café	122
+tests/test_index_doc_boundaries.cpp	Astral Café	121
 tests/test_index_field_queries.cpp	Astral Café	226
 tests/test_index_seek_checkpoints.cpp	Astral Café	114
+tests/test_isr_and.cpp	Astral Café	114
+tests/test_isr_container.cpp	Astral Café	122
+tests/test_isr_enddoc.cpp	Astral Café	85
+tests/test_isr_or.cpp	Astral Café	91
+tests/test_isr_phrase.cpp	Astral Café	113
 tests/test_page_file_initialization.cpp	Abby Troost	20
-tests/test_query_compiler.cpp	lytreallynb	73
+tests/test_query_compiler.cpp	Astral Café	47
+tests/test_query_compiler.cpp	lytreallynb	49
+tests/test_query_parser.cpp	Astral Café	101
 tests/test_robotscache.cpp	Jess Morton	23
 tests/test_robotscache.cpp	Abby Troost	1
-tests/test_snippet_roundtrip.cpp	Astral Café	144
+tests/test_snippet_roundtrip.cpp	Astral Café	153
 tests/test_span_finder.cpp	Astral Café	1
 tests/test_span_finder.cpp	lytreallynb	99
 tests/test_static_eval.cpp	Astral Café	178
 tests/test_static_ranker.cpp	Astral Café	49
 tests/test_url_parser.cpp	Astral Café	108
 CMakeLists.txt	Jess Morton	3
-CMakeLists.txt	Jaegun Song	17
-CMakeLists.txt	Astral Café	39
+CMakeLists.txt	Jaegun Song	9
+CMakeLists.txt	Astral Café	49
 CMakeLists.txt	lytreallynb	17
 CMakeLists.txt	Abby Troost	24
 CMakePresets.json	Astral Café	17

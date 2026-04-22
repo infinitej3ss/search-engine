@@ -1,20 +1,20 @@
 file	section	component	loc
-CMakeLists.txt	other_lang	other	99
+CMakeLists.txt	other_lang	other	102
 CMakePresets.json	other_lang	other	17
-config/weights.hpp	major	Ranker	109
+config/weights.hpp	major	Ranker	210
 continue.sh	other_lang	other	2
-frontend/index.html	other_lang	Front end	18
-frontend/results.html	other_lang	Front end	25
-frontend/search.js	other_lang	Front end	200
-frontend/style.css	other_lang	Front end	207
+frontend/index.html	other_lang	Front end	20
+frontend/results.html	other_lang	Front end	28
+frontend/search.js	other_lang	Front end	219
+frontend/style.css	other_lang	Front end	358
 init.sh	other_lang	other	17
 rebuild_and_continue.sh	other_lang	other	8
 server/LinuxTinyServer.cpp	major	Front end	540
 server/Plugin.h	major	Front end	59
-server/SearchPlugin.cpp	major	Front end	165
-server/ShardPlugin.cpp	major	Front end	210
+server/SearchPlugin.cpp	major	Front end	180
+server/ShardPlugin.cpp	major	Front end	268
 server/html/index.html	other_lang	Front end	69
-src/build_index.cpp	other_cpp	main( ) and other glue	293
+src/build_index.cpp	other_cpp	main( ) and other glue	338
 src/crawler/BloomFilter.h	major	Crawler	152
 src/crawler/HtmlParser.h	major	HTML Parser	426
 src/crawler/HtmlTags.cpp	major	HTML Parser	70
@@ -45,50 +45,57 @@ src/crawler/robots.txt/Utf8.h	major	Crawler	246
 src/crawler/robots.txt/pause.cpp	major	Crawler	12
 src/crawler/worker_thread.cpp	major	Crawler	89
 src/crawler/worker_thread.h	major	Crawler	9
-src/engine/query_distributor.hpp	major	Front end	193
-src/engine/search_engine.hpp	major	Front end	495
-src/engine/search_result.hpp	major	Front end	48
-src/engine/shard_client.hpp	major	Front end	243
-src/engine/url_utils.hpp	major	Front end	37
-src/index/Common.cpp	major	Index	140
+src/engine/query_distributor.hpp	major	Front end	228
+src/engine/search_engine.hpp	major	Front end	594
+src/engine/search_result.hpp	major	Front end	52
+src/engine/shard_client.hpp	major	Front end	313
+src/engine/url_utils.hpp	major	Front end	87
+src/index/Common.cpp	major	Index	141
 src/index/Common.h	major	Index	43
 src/index/HashTable.h	major	Index	275
 src/index/blob_format.h	major	Index	102
-src/index/constraint_solver.cpp	major	Constraint solver	83
+src/index/constraint_solver.cpp	major	Constraint solver	84
 src/index/constraint_solver.h	major	Constraint solver	21
 src/index/index.cpp	major	Index	327
 src/index/index.h	major	Index	114
 src/index/index_builder.cpp	major	Index	393
 src/index/index_builder.h	major	Index	96
-src/index/isr.cpp	major	Constraint solver	113
-src/index/isr.h	major	Constraint solver	28
-src/index/page_data.cpp	major	Index	492
+src/index/isr.cpp	major	Constraint solver	482
+src/index/isr.h	major	Constraint solver	233
+src/index/page_data.cpp	major	Index	483
 src/index/page_data.h	major	Index	157
 src/main.cpp	other_cpp	main( ) and other glue	40
 src/majestic_million_parser.cpp	other_cpp	main( ) and other glue	46
-src/query/query_compiler.hpp	major	Query language	69
+src/query/query_ast.hpp	major	Query language	404
+src/query/query_compiler.hpp	major	Query language	36
 src/ranker/dynamic/bm25.cpp	major	Ranker	58
 src/ranker/dynamic/bm25.hpp	major	Ranker	62
-src/ranker/dynamic/dynamic_ranker.hpp	major	Ranker	227
-src/ranker/dynamic/span_finder.hpp	major	Ranker	88
+src/ranker/dynamic/dynamic_ranker.hpp	major	Ranker	280
+src/ranker/dynamic/span_finder.hpp	major	Ranker	81
+src/ranker/dynamic/span_result.hpp	major	Ranker	12
 src/ranker/dynamic/text.hpp	major	Ranker	33
 src/ranker/static/static_ranker.hpp	major	Ranker	184
-src/ranker/static/url_parser.hpp	major	Ranker	270
+src/ranker/static/url_parser.hpp	major	Ranker	303
 test_ranker.cpp	other_cpp	Experiments	72
 tests/test_blob_v4_writer.cpp	other_cpp	Test cases	176
-tests/test_constraint_solver.cpp	other_cpp	Test cases	121
 tests/test_dynamic_ranker.cpp	other_cpp	Test cases	95
 tests/test_frontier.cpp	other_cpp	Test cases	16
 tests/test_helpers.h	other_cpp	Test cases	48
-tests/test_index_case_folding.cpp	other_cpp	Test cases	111
-tests/test_index_doc_boundaries.cpp	other_cpp	Test cases	111
+tests/test_index_case_folding.cpp	other_cpp	Test cases	122
+tests/test_index_doc_boundaries.cpp	other_cpp	Test cases	121
 tests/test_index_field_queries.cpp	other_cpp	Test cases	226
 tests/test_index_seek_checkpoints.cpp	other_cpp	Test cases	114
 tests/test_initializer.cpp	other_cpp	Test cases	0
+tests/test_isr_and.cpp	other_cpp	Test cases	114
+tests/test_isr_container.cpp	other_cpp	Test cases	122
+tests/test_isr_enddoc.cpp	other_cpp	Test cases	85
+tests/test_isr_or.cpp	other_cpp	Test cases	91
+tests/test_isr_phrase.cpp	other_cpp	Test cases	113
 tests/test_page_file_initialization.cpp	other_cpp	Test cases	19
-tests/test_query_compiler.cpp	other_cpp	Test cases	73
+tests/test_query_compiler.cpp	other_cpp	Test cases	96
+tests/test_query_parser.cpp	other_cpp	Test cases	101
 tests/test_robotscache.cpp	other_cpp	Test cases	23
-tests/test_snippet_roundtrip.cpp	other_cpp	Test cases	144
+tests/test_snippet_roundtrip.cpp	other_cpp	Test cases	153
 tests/test_span_finder.cpp	other_cpp	Test cases	100
 tests/test_static_eval.cpp	other_cpp	Test cases	178
 tests/test_static_ranker.cpp	other_cpp	Test cases	49
